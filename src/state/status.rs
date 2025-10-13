@@ -4,18 +4,13 @@
 use serde::{Deserialize, Serialize};
 
 /// The status of the solver
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Default)]
 pub enum Status {
     /// A solver can either be [`NotTerminated`]
+    #[default]
     NotTerminated,
     /// Or the solver can be terminated for [`Cause`]
     Terminated(Cause),
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Self::NotTerminated
-    }
 }
 
 /// Causes for termination of a solver

@@ -7,6 +7,28 @@ use web_time::Duration;
 
 pub use status::{Cause, Status};
 
+#[derive(Clone, Debug)]
+pub enum UpdateData<T> {
+    // The update can return an estimate of the error
+    ErrorEstimate { relative: T, absolute: T },
+    // Some calculations do not track an error estimate, this means they converge through a
+    // different metric. In this case the user needs to tell trellis convergence has been achieved
+    Complete,
+}
+
+/// A simple wrapper for error estimates that can be converted to UpdateData
+#[derive(Clone, Debug)]
+pub struct ErrorEstimate<T>(pub T);
+
+impl<T: Clone> From<ErrorEstimate<T>> for Option<UpdateData<T>> {
+    fn from(estimate: ErrorEstimate<T>) -> Self {
+        Some(UpdateData::ErrorEstimate {
+            relative: estimate.0.clone(),
+            absolute: estimate.0,
+        })
+    }
+}
+
 /// The user-defined state must implement this trait to be used as part of the trellis calculation
 /// loop
 ///
@@ -23,7 +45,14 @@ pub trait UserState {
         true
     }
     // Update the state object at the end of an iteration
-    fn update(&mut self) -> ErrorEstimate<Self::Float>;
+    //
+    // The update method can be used to control convergence:
+    // - By returning an [`UpdateData::ErrorEstimate`] the error estimate will be compared to the
+    //  solver's absolute and relative tolerances. Termination will happen automatically when these
+    //  conditions are satisfied.
+    // - By returning [`UpdateData::Complete`] the solver will terminate immediately
+    // - By returning [`None`] the solver will continue until max iterations
+    fn update(&mut self) -> impl Into<Option<UpdateData<Self::Float>>>;
     // Returns the current parameter value, if one is assigned
     fn get_param(&self) -> Option<&Self::Param>;
     // Returns true if the last iteration was the best iteration seen so far
@@ -48,6 +77,8 @@ pub struct State<S: UserState> {
     /// The termination status of the solver
     pub(crate) termination_status: Status,
     /// The current estimate of the error, that observed in the previous iteration
+    ///
+    /// Note that all stored error values are absolute, to prevent issues at low result values
     error: S::Float,
     /// The estimate of the error observed in the one before last iteration
     prev_error: S::Float,
@@ -57,11 +88,9 @@ pub struct State<S: UserState> {
     prev_best_error: S::Float,
     /// The target relative tolerance
     relative_tolerance: S::Float,
+    /// The target relative tolerance
+    absolute_tolerance: S::Float,
 }
-
-#[repr(transparent)]
-// Wrapping for error estimates during a calculation run
-pub struct ErrorEstimate<F>(pub F);
 
 impl<S> State<S>
 where
@@ -78,6 +107,7 @@ where
             termination_status: Status::NotTerminated,
             time: None,
             relative_tolerance: <<S as UserState>::Float as FloatCore>::epsilon(),
+            absolute_tolerance: <<S as UserState>::Float as FloatCore>::epsilon(),
             error: <<S as UserState>::Float as FloatCore>::infinity(),
             prev_error: <<S as UserState>::Float as FloatCore>::infinity(),
             best_error: <<S as UserState>::Float as FloatCore>::infinity(),
@@ -113,7 +143,7 @@ where
     pub(crate) fn is_initialised(&self) -> bool {
         self.specific
             .as_ref()
-            .map_or(false, |state| state.is_initialised())
+            .is_some_and(|state| state.is_initialised())
     }
 
     /// Returns true if the termination status is [`Status::Terminated`]
@@ -140,23 +170,35 @@ where
     /// Update the state, and the interan state
     pub(crate) fn update(mut self) -> Self {
         let mut specific = self.specific.take().unwrap();
-        let error_estimate = specific.update();
-        self.error = error_estimate.0;
-        if self.error < self.best_error
-            || (FloatCore::is_infinite(self.error)
-                && FloatCore::is_infinite(self.best_error)
-                && FloatCore::is_sign_positive(self.error)
-                    == FloatCore::is_sign_positive(self.best_error))
-        {
-            std::mem::swap(&mut self.prev_best_error, &mut self.best_error);
-            self.best_error = self.error;
-            self.last_best_iter = self.iter;
+        match specific.update().into() {
+            // If an error estimate was provided update the internal state accordingly
+            Some(UpdateData::ErrorEstimate { absolute, .. }) => {
+                self.error = absolute;
+                if self.error < self.best_error
+                    || (FloatCore::is_infinite(self.error)
+                        && FloatCore::is_infinite(self.best_error)
+                        && FloatCore::is_sign_positive(self.error)
+                            == FloatCore::is_sign_positive(self.best_error))
+                {
+                    std::mem::swap(&mut self.prev_best_error, &mut self.best_error);
+                    self.best_error = self.error;
+                    self.last_best_iter = self.iter;
 
-            specific.last_was_best();
-        }
-        self.specific = Some(specific);
+                    specific.last_was_best();
+                }
+            }
+            // If the calculation completed successfully return
+            Some(UpdateData::Complete) => {
+                return self
+                    .set_specific(specific)
+                    .terminate_due_to(Cause::Converged);
+            }
+            _ => (),
+        };
 
-        if self.error < self.relative_tolerance {
+        self = self.set_specific(specific);
+
+        if self.error < self.absolute_tolerance {
             return self.terminate_due_to(Cause::Converged);
         }
         if self.current_iteration() > self.max_iter {
@@ -192,6 +234,13 @@ where
     /// Set the relative tolerance target
     pub fn relative_tolerance(mut self, relative_tolerance: S::Float) -> Self {
         self.relative_tolerance = relative_tolerance;
+        self
+    }
+
+    #[must_use]
+    /// Set the relative tolerance target
+    pub fn absolute_tolerance(mut self, absolute_tolerance: S::Float) -> Self {
+        self.absolute_tolerance = absolute_tolerance;
         self
     }
 

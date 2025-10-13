@@ -12,7 +12,6 @@ use std::sync::{Arc, Mutex};
 // pub use plot::PlotGenerator;
 //
 mod tracing;
-pub use tracing::Tracer;
 
 pub enum Target {
     Param,
@@ -90,10 +89,11 @@ pub enum ObservationError {
     Writer(Box<dyn std::error::Error + 'static>), // We don't wrap the actual error, as we don't want to import the deps unless requested
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
 // How often the observations should take place
 pub enum Frequency {
     // An observer that never observes
+    #[default]
     Never,
     // Observations occur on every iteration
     Always,
@@ -101,10 +101,4 @@ pub enum Frequency {
     Every(usize),
     // The observer runs during the wrap up stage only
     OnExit,
-}
-
-impl Default for Frequency {
-    fn default() -> Self {
-        Self::Never
-    }
 }

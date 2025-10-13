@@ -12,7 +12,7 @@ use web_time::{Duration, Instant};
 
 use crate::{
     controller::{set_handler, Control},
-    result::{ErrorCause, TrellisError},
+    result::{CalculationResult, ErrorCause, TrellisError},
     watchers::{Observable, ObserverSlice, ObserverVec, Stage},
     Output, UserState,
 };
@@ -160,7 +160,7 @@ where
 
     /// Execute the runner
     #[instrument(name = "running trellis computation", fields(ident = C::NAME), skip_all)]
-    pub fn run(mut self) -> Result<Output<C::Output, S>, TrellisError<C::Output, C::Error>> {
+    pub fn run(mut self) -> CalculationResult<C::Output, S, C::Error> {
         // Todo: Load checkpoints? (resuscitate)
         let start_time = self.now();
 

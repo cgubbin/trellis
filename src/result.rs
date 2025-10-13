@@ -5,6 +5,9 @@ use crate::{State, UserState};
 use num_traits::float::FloatCore;
 use std::fmt;
 
+/// Type alias for the result of running a calculation
+pub type CalculationResult<O, S, E> = Result<Output<O, S>, TrellisError<O, E>>;
+
 /// The output of a calculation
 ///
 /// The calculation output is user defined in the finalise step of the [`Calculation`] trait, but
@@ -103,6 +106,12 @@ impl<O, E> From<E> for TrellisError<O, E> {
             cause: ErrorCause::User(cause),
             result: None,
         }
+    }
+}
+
+impl<O, E: ::std::fmt::Debug> ::std::fmt::Display for TrellisError<O, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Trellis error: {:?}", self.cause)
     }
 }
 

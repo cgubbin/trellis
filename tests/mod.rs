@@ -1,8 +1,7 @@
 use core::f64;
 use std::path::PathBuf;
 
-use hifitime::Duration;
-use trellis::{prelude::*, ErrorEstimate};
+use trellis_runner::{prelude::*, ErrorEstimate};
 
 struct DummyCalculation {}
 
