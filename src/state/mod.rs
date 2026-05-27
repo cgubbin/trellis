@@ -33,30 +33,49 @@ impl<T: Clone> From<ErrorEstimate<T>> for Option<UpdateData<T>> {
 /// loop
 ///
 /// All other state methods are auto-implemented on a type wrapping the user-defined state.
-pub trait UserState {
+pub trait UserState: Default {
     type Float: TrellisFloat;
     type Param;
-
-    /// Create a new instance of the user-defined state object
-    fn new() -> Self;
 
     // Returns true when the state object is initialised correctly
     fn is_initialised(&self) -> bool {
         true
     }
-    // Update the state object at the end of an iteration
-    //
-    // The update method can be used to control convergence:
-    // - By returning an [`UpdateData::ErrorEstimate`] the error estimate will be compared to the
-    //  solver's absolute and relative tolerances. Termination will happen automatically when these
-    //  conditions are satisfied.
-    // - By returning [`UpdateData::Complete`] the solver will terminate immediately
-    // - By returning [`None`] the solver will continue until max iterations
-    fn update(&mut self) -> impl Into<Option<UpdateData<Self::Float>>>;
+
     // Returns the current parameter value, if one is assigned
     fn get_param(&self) -> Option<&Self::Param>;
-    // Returns true if the last iteration was the best iteration seen so far
-    fn last_was_best(&mut self);
+
+    // Called when this iteration was the best iteration seen so far
+    fn on_best_iteration(&mut self) {}
+}
+
+/// Trait for controlling convergence behavior
+pub trait ConvergenceControl<F: TrellisFloat> {
+    /// Update the state object at the end of an iteration
+    ///
+    /// The update method can be used to control convergence:
+    /// - By returning an [`UpdateData::ErrorEstimate`] the error estimate will be compared to the
+    ///  solver's absolute and relative tolerances. Termination will happen automatically when these
+    ///  conditions are satisfied.
+    /// - By returning [`UpdateData::Complete`] the solver will terminate immediately
+    /// - By returning [`None`] the solver will continue until max iterations
+    fn update(&mut self) -> impl Into<Option<UpdateData<F>>>;
+}
+
+/// Automatically implement ConvergenceControl for any UserState that provides an update method
+impl<T> ConvergenceControl<T::Float> for T
+where
+    T: UserState,
+    T: UpdateProvider<T::Float>,
+{
+    fn update(&mut self) -> impl Into<Option<UpdateData<T::Float>>> {
+        self.provide_update()
+    }
+}
+
+/// Helper trait for states that want to provide convergence updates
+pub trait UpdateProvider<F: TrellisFloat> {
+    fn provide_update(&mut self) -> impl Into<Option<UpdateData<F>>>;
 }
 
 /// The state of the [`trellis`] solver
@@ -100,7 +119,7 @@ where
     /// Create a new instance of the iteration state
     pub(crate) fn new() -> Self {
         Self {
-            specific: Some(S::new()),
+            specific: Some(S::default()),
             iter: 0,
             last_best_iter: 0,
             max_iter: usize::MAX,
