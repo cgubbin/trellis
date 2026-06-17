@@ -25,14 +25,13 @@ serde_json = { version = "1", optional = true }
 tempfile = { version = "3", optional = true }
 thiserror = "1"
 # tokio = { version = "1", features = ["sync"], optional = true }
-tokio-util = { version = "0.7.12", optional = true }
+tokio-util = "0.7.12"
 tracing = "0.1.40"
 web-time = "1.1.0"
 
 [features]
 # default = ["tokio", "ctrlc", "plotting", "writing"]
 default = []
-tokio = ["dep:tokio-util"]
 ctrlc = ["dep:ctrlc"]
 plotting = ["dep:plotly", "dep:ndarray"]
 writing = [

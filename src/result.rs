@@ -1,12 +1,33 @@
 //! This module defines the default output type for a trellis calculation, in addition to the error
 //! wrapper.
 
-use crate::{State, UserState};
+use crate::{Checkpoint, State, Termination, UserState};
 use num_traits::float::FloatCore;
 use std::fmt;
 
 /// Type alias for the result of running a calculation
-pub type CalculationResult<O, S, E> = Result<Output<O, S>, TrellisError<O, E>>;
+pub enum EngineResult<O, S, E>
+where
+    S: UserState,
+{
+    Success(Output<O, S>),
+    Terminated {
+        termination: Termination,
+        output: Output<O, S>,
+    },
+    Failed {
+        error: E,
+        checkpoint: Option<Checkpoint<S>>,
+    },
+}
+
+pub struct TerminatedOutput<O, S>
+where
+    S: UserState,
+{
+    pub termination: Termination,
+    pub result: Output<O, S>,
+}
 
 /// The output of a calculation
 ///
@@ -31,39 +52,32 @@ where
     <S as UserState>::Float: FloatCore,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(cause) = self.state.termination_cause() {
-            use crate::Cause::*;
-            match cause {
+        if let Some(termination) = self.state.termination() {
+            use crate::Termination::*;
+            match termination {
                 Converged => {
                     writeln!(
                         f,
                         "Solver converged after {} iterations",
-                        self.state.current_iteration()
+                        self.state.iteration()
                     )?;
                     if let Some(duration) = self.state.duration() {
                         writeln!(f, "Duration {:?}", duration)?;
                     }
                     writeln!(f, "{}", self.result)?;
                 }
-                ControlC => {
+                Cancelled => {
                     writeln!(
                         f,
-                        "Solver converged by ctrl-c intervention after {} iterations",
-                        self.state.current_iteration()
-                    )?;
-                }
-                Parent => {
-                    writeln!(
-                        f,
-                        "Solver converged by parent intervention after {} iterations",
-                        self.state.current_iteration()
+                        "Solver cancelled after {} iterations",
+                        self.state.iteration()
                     )?;
                 }
                 ExceededMaxIterations => {
                     writeln!(
                         f,
                         "Solver exceeded maximum iterations ({})",
-                        self.state.current_iteration()
+                        self.state.iteration()
                     )?;
                 }
             }
@@ -95,34 +109,13 @@ where
 pub struct TrellisError<O, E> {
     #[source]
     /// The underlying error cause.
-    pub cause: ErrorCause<E>,
+    pub error: E,
     /// An optional result which can be extracted by the caller
     pub result: Option<O>,
 }
 
-impl<O, E> From<E> for TrellisError<O, E> {
-    fn from(cause: E) -> Self {
-        Self {
-            cause: ErrorCause::User(cause),
-            result: None,
-        }
-    }
-}
-
 impl<O, E: ::std::fmt::Debug> ::std::fmt::Display for TrellisError<O, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Trellis error: {:?}", self.cause)
+        writeln!(f, "Trellis error: {:?}", self.error)
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ErrorCause<E> {
-    #[error("error in user defined calculation: {0}")]
-    User(#[from] E),
-    #[error("exceeded maximum number of iterations")]
-    MaxIterExceeded,
-    #[error("calculation cancelled due to ctrl-c")]
-    ControlC,
-    #[error("calculation cancelled due to cancelled token")]
-    CancellationToken,
 }

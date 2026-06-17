@@ -10,18 +10,22 @@ pub enum Status {
     #[default]
     NotTerminated,
     /// Or the solver can be terminated for [`Cause`]
-    Terminated(Cause),
+    Terminated(Termination),
 }
 
 /// Causes for termination of a solver
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum Cause {
-    /// The caller has manually terminated the process with ctrl-C
-    ControlC,
-    /// A parent thread had terminated the process using a [`tokio::CancellationToken`]
-    Parent,
+pub enum Termination {
+    /// The caller has manually terminated the process
+    Cancelled,
     /// The solver has converged to the requested tolerance
     Converged,
     /// The solver has exceeded the maximum allowable iterations
     ExceededMaxIterations,
+}
+
+impl Termination {
+    pub(crate) fn failed(&self) -> bool {
+        *self != Self::Converged
+    }
 }
