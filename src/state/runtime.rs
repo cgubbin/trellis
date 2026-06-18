@@ -1,7 +1,7 @@
-use super::Termination;
+use crate::Termination;
 use web_time::Duration;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RuntimeState {
     iter: usize,
     max_iter: usize,

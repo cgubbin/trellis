@@ -3,16 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The status of the solver
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Default)]
-pub enum Status {
-    /// A solver can either be [`NotTerminated`]
-    #[default]
-    NotTerminated,
-    /// Or the solver can be terminated for [`Cause`]
-    Terminated(Termination),
-}
-
 /// Causes for termination of a solver
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Termination {
@@ -22,6 +12,10 @@ pub enum Termination {
     Converged,
     /// The solver has exceeded the maximum allowable iterations
     ExceededMaxIterations,
+    /// The solver has exceeded the permitted patience without improvement
+    Stagnated,
+    /// The solver has run for more than the permitted time
+    Timeout,
 }
 
 impl Termination {

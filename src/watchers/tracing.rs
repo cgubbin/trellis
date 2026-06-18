@@ -72,21 +72,21 @@ impl Tracer {
     {
         match self.level {
             Level::INFO => info!(
-                iteration = state.iteration(),
-                best = state.best(),
-                current = state.current(),
+                iteration = state.runtime.iteration(),
+                best = state.convergence.best(),
+                current = state.convergence.current(),
                 since_best = state.iterations_since_best(),
             ),
             Level::DEBUG => debug!(
-                iteration = state.iteration(),
-                best = state.best(),
-                current = state.current(),
+                iteration = state.runtime.iteration(),
+                best = state.convergence.best(),
+                current = state.convergence.current(),
                 since_best = state.iterations_since_best(),
             ),
             Level::TRACE => trace!(
-                iteration = state.iteration(),
-                best = state.best(),
-                current = state.current(),
+                iteration = state.runtime.iteration(),
+                best = state.convergence.best(),
+                current = state.convergence.current(),
                 since_best = state.iterations_since_best(),
             ),
             _ => unreachable!(

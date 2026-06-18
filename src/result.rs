@@ -5,22 +5,6 @@ use crate::{Checkpoint, State, Termination, UserState};
 use num_traits::float::FloatCore;
 use std::fmt;
 
-/// Type alias for the result of running a calculation
-pub enum EngineResult<O, S, E>
-where
-    S: UserState,
-{
-    Success(Output<O, S>),
-    Terminated {
-        termination: Termination,
-        output: Output<O, S>,
-    },
-    Failed {
-        error: E,
-        checkpoint: Option<Checkpoint<S>>,
-    },
-}
-
 pub struct TerminatedOutput<O, S>
 where
     S: UserState,
@@ -52,16 +36,16 @@ where
     <S as UserState>::Float: FloatCore,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(termination) = self.state.termination() {
+        if let Some(termination) = self.state.runtime.termination() {
             use crate::Termination::*;
             match termination {
                 Converged => {
                     writeln!(
                         f,
                         "Solver converged after {} iterations",
-                        self.state.iteration()
+                        self.state.runtime.iteration()
                     )?;
-                    if let Some(duration) = self.state.duration() {
+                    if let Some(duration) = self.state.runtime.duration() {
                         writeln!(f, "Duration {:?}", duration)?;
                     }
                     writeln!(f, "{}", self.result)?;
@@ -70,14 +54,28 @@ where
                     writeln!(
                         f,
                         "Solver cancelled after {} iterations",
-                        self.state.iteration()
+                        self.state.runtime.iteration()
                     )?;
                 }
                 ExceededMaxIterations => {
                     writeln!(
                         f,
                         "Solver exceeded maximum iterations ({})",
-                        self.state.iteration()
+                        self.state.runtime.iteration()
+                    )?;
+                }
+                Stagnated => {
+                    writeln!(
+                        f,
+                        "Solver stagnant for ({}) iterations",
+                        self.state.iterations_since_best()
+                    )?;
+                }
+                Timeout => {
+                    writeln!(
+                        f,
+                        "Solver timed out for ({:?}) ",
+                        self.state.runtime.duration()
                     )?;
                 }
             }

@@ -7,6 +7,7 @@ mod checkpoint;
 mod engine;
 pub mod prelude;
 mod problem;
+mod progress;
 mod result;
 mod watchers;
 
@@ -16,17 +17,16 @@ pub use checkpoint::Checkpoint;
 pub(crate) use controller::Control;
 pub use procedure::Procedure;
 
-pub use engine::{CancellationGuard, GenerateBuilder};
+pub use engine::{CancellationGuard, GenerateBuilder, Termination};
 pub use problem::Problem;
-pub use result::{EngineResult, Output, TrellisError};
-pub use state::{ErrorEstimate, State, Status, Termination, UpdateData, UserState};
-// pub use watchers::Tracer;
+pub use result::{Output, TrellisError};
+pub use state::{State, UserState};
 pub use watchers::{Frequency, Target};
 
 pub use web_time::Duration;
 
 pub trait TrellisFloat:
-    std::fmt::Display + serde::Serialize + num_traits::float::FloatCore
+    std::fmt::Display + std::fmt::Debug + serde::Serialize + num_traits::float::FloatCore
 {
 }
 

@@ -1,4 +1,5 @@
-use super::{RuntimeState, UpdateData};
+use super::RuntimeState;
+use crate::progress::Progress;
 use num_traits::float::FloatCore;
 
 #[derive(Clone, Debug)]
@@ -11,8 +12,10 @@ pub struct ConvergenceState<F> {
 
     last_best_iteration: usize,
 
-    relative_tolerance: F,
-    absolute_tolerance: F,
+    current_metric: F,
+    best_metric: F,
+    previous_metric: F,
+    previous_best_metric: F,
 }
 
 impl<F: FloatCore> ConvergenceState<F> {
@@ -26,8 +29,11 @@ impl<F: FloatCore> ConvergenceState<F> {
 
             last_best_iteration: 0,
 
-            relative_tolerance: F::epsilon(),
-            absolute_tolerance: F::epsilon(),
+            current_metric: F::infinity(),
+            best_metric: F::infinity(),
+
+            previous_metric: F::infinity(),
+            previous_best_metric: F::infinity(),
         }
     }
 
@@ -69,19 +75,35 @@ impl<F: FloatCore> ConvergenceState<F> {
         current_iteration - self.last_best_iteration
     }
 
-    pub fn set_relative_tolerance(&mut self, relative_tolerance: F) {
-        self.relative_tolerance = relative_tolerance;
-    }
-
-    pub fn set_absolute_tolerance(&mut self, absolute_tolerance: F) {
-        self.absolute_tolerance = absolute_tolerance;
-    }
-
-    pub fn relative_tolerance(&self) -> F {
-        self.relative_tolerance
-    }
-
-    pub fn absolute_tolerance(&self) -> F {
-        self.absolute_tolerance
+    pub fn observe(&mut self, progress: Progress<F>, iteration: usize) {
+        match progress {
+            Progress::Complete => {}
+            Progress::ErrorEstimate { absolute, relative } => {
+                self.current = absolute;
+                if self.current < self.best
+                    || (FloatCore::is_infinite(self.current)
+                        && FloatCore::is_infinite(self.best)
+                        && FloatCore::is_sign_positive(self.current)
+                            == FloatCore::is_sign_positive(self.best))
+                {
+                    std::mem::swap(&mut self.previous_best, &mut self.best);
+                    self.best = self.current;
+                    self.last_best_iteration = iteration;
+                }
+            }
+            Progress::Metric { value } => {
+                self.current_metric = value;
+                if self.current_metric < self.best_metric
+                    || (FloatCore::is_infinite(self.current_metric)
+                        && FloatCore::is_infinite(self.best_metric)
+                        && FloatCore::is_sign_positive(self.current_metric)
+                            == FloatCore::is_sign_positive(self.best_metric))
+                {
+                    std::mem::swap(&mut self.previous_best_metric, &mut self.best_metric);
+                    self.best_metric = self.current_metric;
+                    self.last_best_iteration = iteration;
+                }
+            }
+        }
     }
 }

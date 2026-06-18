@@ -1,7 +1,7 @@
 use num_traits::float::FloatCore;
 use tokio_util::sync::CancellationToken;
 
-use super::{DefaultEnginePolicy, Engine, Error};
+use super::{Engine, Error};
 use crate::{
     watchers::{Frequency, Observable, Observer, ObserverVec},
     Control, Problem, Procedure, State, UserState,
@@ -90,42 +90,42 @@ fn attach_ctrlc(token: CancellationToken) -> Result<(), Error> {
     Ok(())
 }
 
-impl<P> Builder<P>
-where
-    P: Procedure,
-    P::State: UserState,
-{
-    #[must_use]
-    pub fn with_cancellation_token(self, cancellation_token: CancellationToken) -> Builder<P> {
-        Builder {
-            procedure: self.procedure,
-            problem: self.problem,
-            state: self.state,
-            time: self.time,
-            cancellation_token: Some(cancellation_token),
-            observers: self.observers,
-        }
-    }
+// impl<P> Builder<P>
+// where
+//     P: Procedure,
+//     P::State: UserState,
+// {
+//     #[must_use]
+//     pub fn with_cancellation_token(self, cancellation_token: CancellationToken) -> Builder<P> {
+//         Builder {
+//             procedure: self.procedure,
+//             problem: self.problem,
+//             state: self.state,
+//             time: self.time,
+//             cancellation_token: Some(cancellation_token),
+//             observers: self.observers,
+//         }
+//     }
 
-    pub fn finalise(self) -> Result<Engine<P, DefaultEnginePolicy>, Error> {
-        let cancellation = self.cancellation_token.unwrap_or(CancellationToken::new());
+//     pub fn finalise(self) -> Result<Engine<P, DefaultEnginePolicy>, Error> {
+//         let cancellation = self.cancellation_token.unwrap_or(CancellationToken::new());
 
-        #[cfg(feature = "ctrlc")]
-        {
-            let _ = attach_ctrlc(cancellation.clone())?;
-        }
+//         #[cfg(feature = "ctrlc")]
+//         {
+//             let _ = attach_ctrlc(cancellation.clone())?;
+//         }
 
-        let mut engine = Engine {
-            problem: Problem::new(self.problem),
-            procedure: self.procedure,
-            state: Some(self.state),
-            time: self.time,
-            start_time: None,
-            // policy: DefaultConvergencePolicy::default(),
-            policy: todo!(),
-            cancellation,
-            observers: self.observers,
-        };
-        Ok(engine)
-    }
-}
+//         let mut engine = Engine {
+//             problem: Problem::new(self.problem),
+//             procedure: self.procedure,
+//             state: Some(self.state),
+//             time: self.time,
+//             start_time: None,
+//             // policy: DefaultConvergencePolicy::default(),
+//             policy: todo!(),
+//             cancellation,
+//             observers: self.observers,
+//         };
+//         Ok(engine)
+//     }
+// }

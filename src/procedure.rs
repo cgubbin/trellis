@@ -30,24 +30,24 @@ pub trait Procedure {
     fn initialise(
         &mut self,
         _problem: &mut Problem<Self::Problem>,
-        state: Self::State,
-    ) -> Result<Self::State, Self::Error> {
-        Ok(state)
+        state: &mut Self::State,
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
     /// One iteration of the core algorithm
     fn step(
         &mut self,
         problem: &mut Problem<Self::Problem>,
-        state: Self::State,
+        state: &mut Self::State,
         guard: CancellationGuard<'_>,
-    ) -> Result<Self::State, Self::Error>;
+    ) -> Result<(), Self::Error>;
 
-    fn is_finished(&mut self, state: Self::State) -> bool;
+    fn is_finished(&self, state: Self::State) -> bool;
 
     /// Converts the internal state to the user-facing return datatype
     fn finalise(
         &mut self,
         problem: &mut Problem<Self::Problem>,
-        state: Self::State,
+        state: &Self::State,
     ) -> Result<Self::Output, Self::Error>;
 }
