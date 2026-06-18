@@ -1,9 +1,9 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::{Progress, ProgressReport},
     state::{State, UserState},
-    Termination,
 };
 
 pub struct CompletionPolicy;
@@ -15,13 +15,15 @@ where
     fn next(
         &mut self,
         _state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         _cancelled: bool,
-    ) -> PolicyDecision {
-        if Progress::Complete == progress.measure {
-            return PolicyDecision::Stop(crate::Termination::Converged);
+    ) -> EngineEvent<S::Float> {
+        for each in events {
+            if RawEvent::Progress(Progress::Complete) == *each {
+                return EngineEvent::TerminationRequested(crate::Termination::Converged);
+            }
         }
 
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }

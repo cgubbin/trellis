@@ -30,7 +30,7 @@ pub trait UserState: Clone + Default {
     fn get_param(&self) -> Option<&Self::Param>;
 
     // Called when this iteration was the best iteration seen so far
-    fn on_event(&mut self, event: EngineEvent) {}
+    fn on_event(&mut self, event: EngineEvent<Self::Float>) {}
 
     /// Reports progress AFTER update
     fn progress(&self) -> ProgressReport<Self::Float>;

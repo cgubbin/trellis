@@ -1,10 +1,8 @@
 use num_traits::float::FloatCore;
 use tokio_util::sync::CancellationToken;
 
-use super::{Engine, Error};
 use crate::{
-    watchers::{Frequency, Observable, Observer, ObserverVec},
-    Control, Problem, Procedure, State, UserState,
+    watchers::{Frequency, Observable, Observer, ObserverVec}, Procedure, State, UserState,
 };
 
 pub trait GenerateBuilder: Sized + Procedure

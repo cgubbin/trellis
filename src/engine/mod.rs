@@ -1,5 +1,6 @@
 mod builder;
 mod cancellation;
+mod checkpoint;
 mod event;
 mod policy;
 mod result;
@@ -7,15 +8,10 @@ mod termination;
 
 pub use builder::GenerateBuilder;
 pub use cancellation::CancellationGuard;
-pub(crate) use event::EngineEvent;
-use policy::{EnginePolicy, Policies, PolicyDecision};
+pub(crate) use event::{EngineEvent, RawEvent};
+use policy::EnginePolicy;
 pub use result::{EngineFailure, EngineOutput, EngineResult};
 pub use termination::Termination;
-
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
 
 use num_traits::float::FloatCore;
 use tokio_util::sync::CancellationToken;
@@ -23,10 +19,8 @@ use tracing::instrument;
 use web_time::{Duration, Instant};
 
 use crate::{
-    controller::{set_handler, Control},
-    result::TrellisError,
     watchers::{Observable, ObserverSlice, ObserverVec, Stage},
-    Checkpoint, Output, UserState,
+    Output, UserState,
 };
 use crate::{Problem, Procedure, State};
 
@@ -100,14 +94,14 @@ where
         let mut state = self.state.take().unwrap();
 
         self.initialise_state(&mut state)
-            .map_err(|error| EngineFailure { error, state: None })?;
+            .map_err(|error| EngineFailure {
+                error,
+                state: state.clone(),
+            })?;
 
         loop {
             self.step_once(&mut state)
-                .map_err(|(error, state)| EngineFailure {
-                    error,
-                    state: Some(state),
-                })?;
+                .map_err(|(error, state)| EngineFailure { error, state })?;
 
             let progress = state.user.progress();
 
@@ -116,12 +110,13 @@ where
             let action = self.policy.next(&state, progress, cancelled);
 
             match action {
-                PolicyDecision::Pass => continue,
-                PolicyDecision::SaveCheckpoint => self.save_checkpoint(&state).unwrap(),
-                PolicyDecision::Stop(reason) => {
+                EngineEvent::Pass => continue,
+                EngineEvent::CheckpointRequested => self.save_checkpoint(&state).unwrap(),
+                EngineEvent::TerminationRequested(reason) => {
                     state.runtime.terminate(reason);
                     return self.finalise(state);
                 }
+                _ => unimplemented!("enum form not finalised..."),
             }
         }
     }
@@ -152,7 +147,7 @@ where
             .finalise(&mut self.problem, &mut state.user)
             .map_err(|e| EngineFailure {
                 error: e,
-                state: Some(state.clone()),
+                state: state.clone(),
             })?;
 
         self.observers.update(P::NAME, &state, Stage::WrapUp);
@@ -187,9 +182,13 @@ where
 
         let progress = state.user.progress();
 
-        state
+        let events = state
             .convergence
             .observe(progress.measure, state.runtime.iteration());
+
+        for event in events {
+            state.user.on_event(event);
+        }
 
         Ok(())
     }

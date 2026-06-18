@@ -1,7 +1,7 @@
 //! This module defines the default output type for a trellis calculation, in addition to the error
 //! wrapper.
 
-use crate::{Checkpoint, State, Termination, UserState};
+use crate::{State, Termination, UserState};
 use num_traits::float::FloatCore;
 use std::fmt;
 

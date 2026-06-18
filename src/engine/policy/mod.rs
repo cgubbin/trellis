@@ -4,7 +4,6 @@ use crate::state::{State, UserState};
 use num_traits::float::FloatCore;
 use std::time::Duration;
 
-mod action;
 mod cancellation;
 mod complete;
 mod composite;
@@ -16,24 +15,23 @@ mod timeout;
 mod tolerance;
 
 pub use cancellation::CancellationPolicy;
-pub use complete::CompletionPolicy;
-pub use composite::{CompositePolicy, PolicyExt};
+pub use composite::PolicyExt;
 pub use max_iter::MaxIterationPolicy;
 pub use no_progress::NoProgressPolicy;
 pub use stagnation::StagnationPolicy;
 pub use target_value::TargetValuePolicy;
 pub use timeout::TimeoutPolicy;
-pub use tolerance::{AbsoluteTolerancePolicy, RelativeTolerancePolicy};
+pub use tolerance::AbsoluteTolerancePolicy;
 
-pub(crate) use action::PolicyDecision;
+use crate::engine::{EngineEvent, RawEvent};
 
 pub trait EnginePolicy<S: UserState> {
     fn next(
         &mut self,
         state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision;
+    ) -> EngineEvent<S::Float>;
 }
 
 pub struct Policies;

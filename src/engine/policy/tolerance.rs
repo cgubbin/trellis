@@ -1,9 +1,9 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::{Progress, ProgressReport},
     state::{State, UserState},
-    Termination,
 };
 
 pub struct AbsoluteTolerancePolicy<F> {
@@ -34,16 +34,21 @@ where
     fn next(
         &mut self,
         state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision {
-        if let Progress::ErrorEstimate { absolute, .. } = progress.measure {
-            if absolute < self.tolerance {
-                return PolicyDecision::Stop(crate::Termination::Converged);
+    ) -> EngineEvent<S::Float> {
+        for each in events {
+            match each {
+                RawEvent::Progress(Progress::ErrorEstimate { absolute, .. })
+                    if *absolute < self.tolerance =>
+                {
+                    return EngineEvent::TerminationRequested(crate::Termination::Converged);
+                }
+                _ => {}
             }
         }
 
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }
 
@@ -55,15 +60,20 @@ where
     fn next(
         &mut self,
         state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision {
-        if let Progress::ErrorEstimate { relative, .. } = progress.measure {
-            if relative < self.tolerance {
-                return PolicyDecision::Stop(crate::Termination::Converged);
+    ) -> EngineEvent<S::Float> {
+        for each in events {
+            match each {
+                RawEvent::Progress(Progress::ErrorEstimate { relative, .. })
+                    if *relative < self.tolerance =>
+                {
+                    return EngineEvent::TerminationRequested(crate::Termination::Converged);
+                }
+                _ => {}
             }
         }
 
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }

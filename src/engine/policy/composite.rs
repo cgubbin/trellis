@@ -1,6 +1,7 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::ProgressReport,
     state::{State, UserState},
     TrellisFloat,
@@ -50,13 +51,14 @@ where
     fn next(
         &mut self,
         state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision {
-        match self.a.next(state, progress.clone(), cancelled) {
-            PolicyDecision::Stop(t) => return PolicyDecision::Stop(t),
-            PolicyDecision::Pass => self.b.next(state, progress, cancelled),
-            PolicyDecision::SaveCheckpoint => unimplemented!(),
-        }
+    ) -> EngineEvent<S::Float> {
+        //     match self.a.next(state, progress.clone(), cancelled) {
+        //         PolicyDecision::Stop(t) => return PolicyDecision::Stop(t),
+        //         PolicyDecision::Pass => self.b.next(state, progress, cancelled),
+        //         PolicyDecision::SaveCheckpoint => unimplemented!(),
+        //     }
+        todo!()
     }
 }

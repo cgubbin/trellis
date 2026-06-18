@@ -1,6 +1,6 @@
 use crate::result::Output;
 use crate::state::{State, UserState};
-use crate::{Checkpoint, Termination, TrellisFloat};
+use crate::{Termination, TrellisFloat};
 
 /// Type alias for the result of running a calculation
 pub enum EngineOutput<O, S>
@@ -21,7 +21,7 @@ where
     <S as UserState>::Float: TrellisFloat,
 {
     pub error: E,
-    pub state: Option<State<S>>,
+    pub state: State<S>,
 }
 
 pub type EngineResult<O, S, E> = Result<EngineOutput<O, S>, EngineFailure<E, S>>;

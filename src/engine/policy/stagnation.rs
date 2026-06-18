@@ -1,6 +1,7 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::ProgressReport,
     state::{State, UserState},
     Termination,
@@ -23,13 +24,13 @@ where
     fn next(
         &mut self,
         state: &State<S>,
-        _progress: ProgressReport<S::Float>,
+        _events: &[RawEvent<S::Float>],
         _cancelled: bool,
-    ) -> PolicyDecision {
+    ) -> EngineEvent<S::Float> {
         if state.iterations_since_best() >= self.patience {
-            return PolicyDecision::Stop(Termination::Stagnated);
+            return EngineEvent::TerminationRequested(Termination::Stagnated);
         }
 
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }

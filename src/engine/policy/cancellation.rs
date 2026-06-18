@@ -1,6 +1,7 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::ProgressReport,
     state::{State, UserState},
     Termination,
@@ -15,13 +16,13 @@ where
     fn next(
         &mut self,
         _state: &State<S>,
-        _progress: ProgressReport<S::Float>,
+        _events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision {
+    ) -> EngineEvent<S::Float> {
         if cancelled {
-            return PolicyDecision::Stop(Termination::Cancelled);
+            return EngineEvent::TerminationRequested(Termination::Cancelled);
         }
 
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }

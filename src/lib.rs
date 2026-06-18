@@ -3,7 +3,6 @@
 mod controller;
 mod procedure;
 
-mod checkpoint;
 mod engine;
 pub mod prelude;
 mod problem;
@@ -13,7 +12,6 @@ mod watchers;
 
 mod state;
 
-pub use checkpoint::Checkpoint;
 pub(crate) use controller::Control;
 pub use procedure::Procedure;
 

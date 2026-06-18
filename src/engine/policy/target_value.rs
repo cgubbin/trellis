@@ -1,6 +1,7 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::{Progress, ProgressReport},
     state::{State, UserState},
     Termination,
@@ -23,15 +24,17 @@ where
     fn next(
         &mut self,
         _state: &State<S>,
-        progress: ProgressReport<S::Float>,
+        events: &[RawEvent<S::Float>],
         _cancelled: bool,
-    ) -> PolicyDecision {
-        match progress.measure {
-            Progress::Metric { value } if value <= self.target => {
-                PolicyDecision::Stop(Termination::Converged)
+    ) -> EngineEvent<S::Float> {
+        for each in events {
+            match each {
+                RawEvent::Progress(Progress::Metric { value }) if *value <= self.target => {
+                    return EngineEvent::TerminationRequested(Termination::Converged);
+                }
+                _ => {}
             }
-
-            _ => PolicyDecision::Pass,
         }
+        EngineEvent::Pass
     }
 }

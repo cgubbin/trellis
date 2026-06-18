@@ -1,9 +1,9 @@
-use super::{EnginePolicy, PolicyDecision};
+use super::EnginePolicy;
 
 use crate::{
+    engine::{EngineEvent, RawEvent},
     progress::ProgressReport,
     state::{State, UserState},
-    Termination,
 };
 
 pub struct MaxIterationPolicy {
@@ -22,13 +22,20 @@ where
 {
     fn next(
         &mut self,
-        state: &State<S>,
-        _progress: ProgressReport<S::Float>,
+        _state: &State<S>,
+        events: &[RawEvent<S::Float>],
         cancelled: bool,
-    ) -> PolicyDecision {
-        if state.runtime.iteration() > self.max_iters {
-            return PolicyDecision::Stop(crate::Termination::ExceededMaxIterations);
+    ) -> EngineEvent<S::Float> {
+        for each in events {
+            match *each {
+                RawEvent::Iteration { iter } if iter > self.max_iters => {
+                    return EngineEvent::TerminationRequested(
+                        crate::Termination::ExceededMaxIterations,
+                    )
+                }
+                _ => {}
+            }
         }
-        PolicyDecision::Pass
+        EngineEvent::Pass
     }
 }
