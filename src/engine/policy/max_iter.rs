@@ -1,9 +1,8 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
+    engine::{EngineAction, EngineContext, EventBatch},
     progress::ProgressReport,
-    state::{State, UserState},
 };
 
 pub struct MaxIterationPolicy {
@@ -16,26 +15,12 @@ impl MaxIterationPolicy {
     }
 }
 
-impl<S> EnginePolicy<S> for MaxIterationPolicy
-where
-    S: UserState,
-{
-    fn next(
-        &mut self,
-        _state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
-            match *each {
-                RawEvent::Iteration { iter } if iter > self.max_iters => {
-                    return EngineEvent::TerminationRequested(
-                        crate::Termination::ExceededMaxIterations,
-                    )
-                }
-                _ => {}
-            }
+impl<F> EnginePolicy<F> for MaxIterationPolicy {
+    fn decide(&mut self, _batch: &EventBatch<F>, context: &EngineContext) -> EngineAction {
+        if context.iter > self.max_iters {
+            return EngineAction::Stop(crate::Termination::ExceededMaxIterations);
         }
-        EngineEvent::Pass
+
+        EngineAction::Continue
     }
 }

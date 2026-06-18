@@ -1,29 +1,23 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
-    progress::{Progress, ProgressReport},
-    state::{State, UserState},
+    engine::{EngineAction, EngineContext, EventBatch},
+    progress::Progress,
 };
 
 pub struct CompletionPolicy;
 
-impl<S> EnginePolicy<S> for CompletionPolicy
-where
-    S: UserState,
-{
-    fn next(
-        &mut self,
-        _state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        _cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
-            if RawEvent::Progress(Progress::Complete) == *each {
-                return EngineEvent::TerminationRequested(crate::Termination::Converged);
+impl<F> EnginePolicy<F> for CompletionPolicy {
+    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
+        for each in &batch.events {
+            match each {
+                Progress::Complete => {
+                    return EngineAction::Stop(crate::Termination::Converged);
+                }
+                _ => {}
             }
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

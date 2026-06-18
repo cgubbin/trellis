@@ -1,10 +1,11 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
-    progress::{Progress, ProgressReport},
-    state::{State, UserState},
+    engine::{EngineAction, EngineContext, EventBatch},
+    progress::Progress,
 };
+
+use num_traits::float::FloatCore;
 
 pub struct AbsoluteTolerancePolicy<F> {
     tolerance: F,
@@ -26,54 +27,38 @@ impl<F> RelativeTolerancePolicy<F> {
     }
 }
 
-impl<S> EnginePolicy<S> for AbsoluteTolerancePolicy<S::Float>
+impl<F> EnginePolicy<F> for AbsoluteTolerancePolicy<F>
 where
-    S: UserState,
-    S::Float: crate::TrellisFloat,
+    F: FloatCore,
 {
-    fn next(
-        &mut self,
-        state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
+    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
+        for each in &batch.events {
             match each {
-                RawEvent::Progress(Progress::ErrorEstimate { absolute, .. })
-                    if *absolute < self.tolerance =>
-                {
-                    return EngineEvent::TerminationRequested(crate::Termination::Converged);
+                Progress::ErrorEstimate { absolute, .. } if *absolute < self.tolerance => {
+                    return EngineAction::Stop(crate::Termination::Converged);
                 }
                 _ => {}
             }
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }
 
-impl<S> EnginePolicy<S> for RelativeTolerancePolicy<S::Float>
+impl<F> EnginePolicy<F> for RelativeTolerancePolicy<F>
 where
-    S: UserState,
-    S::Float: crate::TrellisFloat,
+    F: FloatCore,
 {
-    fn next(
-        &mut self,
-        state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
+    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
+        for each in &batch.events {
             match each {
-                RawEvent::Progress(Progress::ErrorEstimate { relative, .. })
-                    if *relative < self.tolerance =>
-                {
-                    return EngineEvent::TerminationRequested(crate::Termination::Converged);
+                Progress::ErrorEstimate { relative, .. } if *relative < self.tolerance => {
+                    return EngineAction::Stop(crate::Termination::Converged);
                 }
                 _ => {}
             }
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

@@ -1,12 +1,11 @@
+use super::EngineContext;
 use crate::progress::ProgressReport;
-use crate::state::{State, UserState};
 
 use num_traits::float::FloatCore;
 use std::time::Duration;
 
 mod cancellation;
 mod complete;
-mod composite;
 mod max_iter;
 mod no_progress;
 mod stagnation;
@@ -15,7 +14,6 @@ mod timeout;
 mod tolerance;
 
 pub use cancellation::CancellationPolicy;
-pub use composite::PolicyExt;
 pub use max_iter::MaxIterationPolicy;
 pub use no_progress::NoProgressPolicy;
 pub use stagnation::StagnationPolicy;
@@ -23,70 +21,103 @@ pub use target_value::TargetValuePolicy;
 pub use timeout::TimeoutPolicy;
 pub use tolerance::AbsoluteTolerancePolicy;
 
-use crate::engine::{EngineEvent, RawEvent};
+use crate::engine::{EngineAction, EventBatch};
 
-pub trait EnginePolicy<S: UserState> {
-    fn next(
-        &mut self,
-        state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        cancelled: bool,
-    ) -> EngineEvent<S::Float>;
+pub trait EnginePolicy<F> {
+    fn decide(&mut self, batch: &EventBatch<F>, context: &EngineContext) -> EngineAction;
+}
+
+pub trait PolicyExt<F>: EnginePolicy<F> + Sized + 'static {
+    fn boxed(self) -> Box<dyn EnginePolicy<F>> {
+        Box::new(self)
+    }
+}
+
+impl<F, T> PolicyExt<F> for T where T: EnginePolicy<F> + Sized + 'static {}
+
+pub struct PolicyStack<F> {
+    policies: Vec<Box<dyn EnginePolicy<F>>>,
+}
+
+impl<F> PolicyStack<F> {
+    pub fn new() -> Self {
+        Self { policies: vec![] }
+    }
+
+    pub fn add<P>(mut self, p: P) -> Self
+    where
+        P: EnginePolicy<F> + 'static,
+    {
+        self.policies.push(Box::new(p));
+        self
+    }
+}
+
+impl<F> PolicyStack<F> {
+    pub fn decide(&mut self, batch: &EventBatch<F>, ctx: &EngineContext) -> EngineAction {
+        for p in &mut self.policies {
+            match p.decide(batch, ctx) {
+                EngineAction::Stop(t) => return EngineAction::Stop(t),
+                EngineAction::Continue => {}
+                EngineAction::Step => {}
+            }
+        }
+
+        EngineAction::Step
+    }
 }
 
 pub struct Policies;
 
 impl Policies {
-    pub fn default<S>(max_iter: usize, atol: S::Float) -> impl EnginePolicy<S>
+    pub fn default<F>(max_iter: usize, atol: F) -> PolicyStack<F>
     where
-        S: UserState,
+        F: FloatCore + 'static,
     {
-        CancellationPolicy
-            .and(MaxIterationPolicy::new(max_iter))
-            .and(AbsoluteTolerancePolicy::new(atol))
+        PolicyStack::new()
+            .add(CancellationPolicy)
+            .add(MaxIterationPolicy::new(max_iter))
+            .add(AbsoluteTolerancePolicy::new(atol))
     }
 
-    pub fn optimisation<S>(
-        max_iter: usize,
-        atol: S::Float,
-        stagnation: usize,
-    ) -> impl EnginePolicy<S>
+    pub fn optimisation<F>(max_iter: usize, atol: F, stagnation: usize) -> PolicyStack<F>
     where
-        S: UserState,
+        F: FloatCore + 'static,
     {
-        CancellationPolicy
-            .and(MaxIterationPolicy::new(max_iter))
-            .and(AbsoluteTolerancePolicy::new(atol))
-            .and(StagnationPolicy::new(stagnation))
+        PolicyStack::new()
+            .add(CancellationPolicy)
+            .add(MaxIterationPolicy::new(max_iter))
+            .add(AbsoluteTolerancePolicy::new(atol))
+            .add(StagnationPolicy::new(stagnation))
     }
 
-    pub fn global_optimisation<S>(
-        max_iter: usize,
-        target: S::Float,
-        stagnation: usize,
-    ) -> impl EnginePolicy<S>
+    pub fn global_optimisation<F>(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
     where
-        S: UserState,
-        <S as UserState>::Float: FloatCore,
+        F: FloatCore + 'static,
     {
-        CancellationPolicy
-            .and(MaxIterationPolicy::new(max_iter))
-            .and(TargetValuePolicy::new(target))
-            .and(StagnationPolicy::new(stagnation))
-            .and(NoProgressPolicy::new(S::Float::epsilon(), 50))
+        PolicyStack::new()
+            .add(CancellationPolicy)
+            .add(MaxIterationPolicy::new(max_iter))
+            .add(TargetValuePolicy::new(target))
+            .add(StagnationPolicy::new(stagnation))
+            .add(NoProgressPolicy::new(F::epsilon(), 50))
     }
 
-    pub fn monte_carlo<S>(max_iter: usize) -> impl EnginePolicy<S>
+    pub fn monte_carlo<F>(max_iter: usize) -> PolicyStack<F>
     where
-        S: UserState,
+        F: 'static,
     {
-        CancellationPolicy.and(MaxIterationPolicy::new(max_iter))
+        PolicyStack::new()
+            .add(CancellationPolicy)
+            .add(MaxIterationPolicy::new(max_iter))
     }
 
-    pub fn timed<S>(timeout: Duration) -> impl EnginePolicy<S>
+    pub fn timed<F>(timeout: Duration) -> PolicyStack<F>
     where
-        S: UserState,
+        F: 'static,
     {
-        CancellationPolicy.and(TimeoutPolicy::new(timeout))
+        PolicyStack::new()
+            .add(CancellationPolicy)
+            .add(TimeoutPolicy::new(timeout))
     }
 }

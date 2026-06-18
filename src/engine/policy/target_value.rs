@@ -1,11 +1,12 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
-    progress::{Progress, ProgressReport},
-    state::{State, UserState},
+    engine::{EngineAction, EngineContext, EventBatch},
+    progress::Progress,
     Termination,
 };
+
+use num_traits::float::FloatCore;
 
 pub struct TargetValuePolicy<F> {
     target: F,
@@ -17,24 +18,19 @@ impl<F> TargetValuePolicy<F> {
     }
 }
 
-impl<S> EnginePolicy<S> for TargetValuePolicy<S::Float>
+impl<F> EnginePolicy<F> for TargetValuePolicy<F>
 where
-    S: UserState,
+    F: FloatCore,
 {
-    fn next(
-        &mut self,
-        _state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        _cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
+    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
+        for each in &batch.events {
             match each {
-                RawEvent::Progress(Progress::Metric { value }) if *value <= self.target => {
-                    return EngineEvent::TerminationRequested(Termination::Converged);
+                Progress::Metric { value } if *value <= self.target => {
+                    return EngineAction::Stop(Termination::Converged);
                 }
                 _ => {}
             }
         }
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

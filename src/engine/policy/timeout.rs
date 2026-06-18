@@ -3,9 +3,8 @@ use std::time::Duration;
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
+    engine::{EngineAction, EngineContext, EventBatch},
     progress::ProgressReport,
-    state::{State, UserState},
     Termination,
 };
 
@@ -19,22 +18,12 @@ impl TimeoutPolicy {
     }
 }
 
-impl<S> EnginePolicy<S> for TimeoutPolicy
-where
-    S: UserState,
-{
-    fn next(
-        &mut self,
-        state: &State<S>,
-        _events: &[RawEvent<S::Float>],
-        _cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        if let Some(elapsed) = state.runtime.duration() {
-            if *elapsed >= self.timeout {
-                return EngineEvent::TerminationRequested(Termination::Timeout);
-            }
+impl<F> EnginePolicy<F> for TimeoutPolicy {
+    fn decide(&mut self, _batch: &EventBatch<F>, context: &EngineContext) -> EngineAction {
+        if context.elapsed >= self.timeout {
+            return EngineAction::Stop(Termination::Timeout);
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

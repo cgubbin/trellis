@@ -1,25 +1,31 @@
 mod builder;
 mod cancellation;
 mod checkpoint;
+mod context;
 mod event;
+mod lifecycle;
 mod policy;
 mod result;
 mod termination;
 
+use crate::progress::{Progress, ProgressRow};
 pub use builder::GenerateBuilder;
 pub use cancellation::CancellationGuard;
-pub(crate) use event::{EngineEvent, RawEvent};
+pub use checkpoint::{Checkpoint, CheckpointStore};
+use context::EngineContext;
+pub(crate) use event::{EngineAction, EventBatch};
+pub(crate) use lifecycle::EngineStage;
 use policy::EnginePolicy;
 pub use result::{EngineFailure, EngineOutput, EngineResult};
 pub use termination::Termination;
 
 use num_traits::float::FloatCore;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
-use web_time::{Duration, Instant};
 
 use crate::{
-    watchers::{Observable, ObserverSlice, ObserverVec, Stage},
+    watchers::{ObservationContext, Observers},
     Output, UserState,
 };
 use crate::{Problem, Procedure, State};
@@ -27,11 +33,11 @@ use crate::{Problem, Procedure, State};
 pub type Error = Box<dyn std::error::Error>;
 
 /// General purpose calculation engine
-pub struct Engine<P, Q>
+pub struct Engine<P, Q, C>
 where
     P: Procedure,
     P::State: UserState,
-    Q: EnginePolicy<P::State>,
+    Q: EnginePolicy<<P::State as UserState>::Float>,
 {
     /// Procedure to be run
     procedure: P,
@@ -44,79 +50,61 @@ where
     /// Should execution be timed
     time: bool,
 
-    start_time: Option<std::time::Instant>,
+    start_time: std::time::Instant,
     /// Receiver
     ///
     /// When a signal is received on this channel the procedure is terminated.
     cancellation: CancellationToken,
 
-    observers: ObserverVec<State<P::State>>,
+    observers: Observers<P::State>,
+
+    checkpoint_store: C,
 }
 
-impl<P, Q> Engine<P, Q>
-where
-    P: Procedure,
-    P::State: UserState,
-    Q: EnginePolicy<P::State>,
-{
-    fn now(&self) -> Option<Instant> {
-        if self.time {
-            return Some(Instant::now());
-        }
-        None
-    }
-
-    pub(crate) fn observers(&self) -> ObserverSlice<'_, State<P::State>> {
-        self.observers.as_slice()
-    }
-
-    pub(crate) fn observers_mut(&mut self) -> &mut ObserverVec<State<P::State>> {
-        &mut self.observers
-    }
-
-    fn duration_since(&self, maybe_previous: Option<&Instant>) -> Option<Duration> {
-        if let Some(previous) = maybe_previous {
-            let now = self.now().unwrap();
-            return Some(now.duration_since(*previous));
-        }
-        None
-    }
-}
-
-impl<P, Q> Engine<P, Q>
+impl<P, Q, C> Engine<P, Q, C>
 where
     P: Procedure,
     P::State: UserState,
     <P::State as UserState>::Float: FloatCore,
-    Q: EnginePolicy<P::State>,
+    Q: EnginePolicy<<P::State as UserState>::Float>,
+    C: CheckpointStore<P::State>,
 {
-    pub fn run(mut self) -> EngineResult<P::Output, P::State, P::Error> {
+    pub fn run(mut self) -> EngineResult<P::Output, P::State, P::Error, C::Error> {
         let mut state = self.state.take().unwrap();
 
         self.initialise_state(&mut state)
-            .map_err(|error| EngineFailure {
+            .map_err(|error| EngineFailure::Procedure {
                 error,
                 state: state.clone(),
             })?;
 
         loop {
-            self.step_once(&mut state)
-                .map_err(|(error, state)| EngineFailure { error, state })?;
+            let events = self
+                .step_once(&mut state)
+                .map_err(|(error, state)| EngineFailure::Procedure { error, state })?;
 
-            let progress = state.user.progress();
+            let ctx = EngineContext {
+                iter: state.runtime.iteration(),
+                elapsed: Instant::now() - self.start_time,
+                cancelled: self.cancellation.is_cancelled(),
+                checkpoint_due: false,
+                start_time: self.start_time,
+                _marker: Default::default(),
+            };
 
-            let cancelled = self.cancellation.is_cancelled();
+            let batch = EventBatch {
+                events: events.clone(),
+            };
 
-            let action = self.policy.next(&state, progress, cancelled);
+            let action = self.policy.decide(&batch, &ctx);
 
             match action {
-                EngineEvent::Pass => continue,
-                EngineEvent::CheckpointRequested => self.save_checkpoint(&state).unwrap(),
-                EngineEvent::TerminationRequested(reason) => {
+                EngineAction::Continue => continue,
+                EngineAction::Step => continue,
+                EngineAction::Stop(reason) => {
                     state.runtime.terminate(reason);
                     return self.finalise(state);
                 }
-                _ => unimplemented!("enum form not finalised..."),
             }
         }
     }
@@ -126,31 +114,58 @@ where
         self.procedure
             .initialise(&mut self.problem, &mut state.user)?;
 
+        let ctx = crate::watchers::ObservationContext {
+            iteration: state.runtime.iteration(),
+            termination: None,
+            stage: EngineStage::Initialisation,
+        };
+
         self.observers
-            .update(P::NAME, &state, Stage::Initialisation);
+            .observe_progress(P::NAME, ProgressRow::from(&state), &ctx, true);
+        self.observers.observe_state(P::NAME, &state, &ctx, true);
 
         Ok(())
     }
 
     #[instrument(name = "saving checkpoint", fields(ident = P::NAME), skip_all)]
-    fn save_checkpoint(&mut self, state: &State<P::State>) -> Result<(), P::Error> {
-        todo!()
+    fn save_checkpoint(&mut self, state: &State<P::State>) -> Result<(), C::Error> {
+        let checkpoint = Checkpoint {
+            state: state.clone(),
+        };
+
+        self.checkpoint_store.save(&checkpoint)
+    }
+
+    pub fn resume_from_checkpoint(mut self) -> Result<Self, C::Error> {
+        if let Some(cp) = self.checkpoint_store.load()? {
+            self.state = Some(cp.state);
+        }
+
+        Ok(self)
     }
 
     #[instrument(name = "wrapping up runner", fields(ident = P::NAME), skip_all)]
     fn finalise(
         &mut self,
         mut state: State<P::State>,
-    ) -> EngineResult<P::Output, P::State, P::Error> {
+    ) -> EngineResult<P::Output, P::State, P::Error, C::Error> {
         let output = self
             .procedure
             .finalise(&mut self.problem, &mut state.user)
-            .map_err(|e| EngineFailure {
+            .map_err(|e| EngineFailure::Procedure {
                 error: e,
                 state: state.clone(),
             })?;
 
-        self.observers.update(P::NAME, &state, Stage::WrapUp);
+        let ctx = crate::watchers::ObservationContext {
+            iteration: state.runtime.iteration(),
+            termination: None,
+            stage: EngineStage::WrapUp,
+        };
+
+        self.observers
+            .observe_progress(P::NAME, ProgressRow::from(&state), &ctx, true);
+        self.observers.observe_state(P::NAME, &state, &ctx, true);
 
         let output = Output::new(output, state.clone());
 
@@ -166,7 +181,7 @@ where
     fn step_once(
         &mut self,
         state: &mut State<P::State>,
-    ) -> Result<(), (P::Error, State<P::State>)> {
+    ) -> Result<Vec<Progress<<P::State as UserState>::Float>>, (P::Error, State<P::State>)> {
         state.runtime.increment_iteration();
 
         let prev = state.clone();
@@ -180,17 +195,23 @@ where
             )
             .map_err(|e| (e, prev))?;
 
+        let ctx = crate::watchers::ObservationContext {
+            iteration: state.runtime.iteration(),
+            termination: None,
+            stage: EngineStage::Iteration,
+        };
+
         let progress = state.user.progress();
 
-        let events = state
+        state
             .convergence
-            .observe(progress.measure, state.runtime.iteration());
+            .observe(&progress.measure, state.runtime.iteration());
 
-        for event in events {
-            state.user.on_event(event);
-        }
+        self.observers
+            .observe_progress(P::NAME, ProgressRow::from(state), &ctx, false);
+        self.observers.observe_state(P::NAME, &state, &ctx, false);
 
-        Ok(())
+        Ok(vec![progress.measure])
     }
 }
 

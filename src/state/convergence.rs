@@ -1,4 +1,3 @@
-use crate::engine::RawEvent;
 use crate::progress::Progress;
 use num_traits::float::FloatCore;
 
@@ -75,16 +74,11 @@ impl<F: FloatCore> ConvergenceState<F> {
         current_iteration - self.last_best_iteration
     }
 
-    pub fn observe(&mut self, progress: Progress<F>, iteration: usize) -> Vec<RawEvent<F>> {
-        let mut events = vec![];
-
-        events.push(RawEvent::Iteration { iter: iteration });
-
+    pub fn observe(&mut self, progress: &Progress<F>, iteration: usize) {
         match progress {
             Progress::Complete => {}
-            Progress::ErrorEstimate { absolute, relative } => {
-                self.current = absolute;
-                events.push(RawEvent::ErrorUpdated { value: absolute });
+            Progress::ErrorEstimate { absolute, .. } => {
+                self.current = *absolute;
                 if self.current < self.best
                     || (FloatCore::is_infinite(self.current)
                         && FloatCore::is_infinite(self.best)
@@ -97,8 +91,7 @@ impl<F: FloatCore> ConvergenceState<F> {
                 }
             }
             Progress::Metric { value } => {
-                self.current_metric = value;
-                events.push(RawEvent::ErrorUpdated { value });
+                self.current_metric = *value;
                 if self.current_metric < self.best_metric
                     || (FloatCore::is_infinite(self.current_metric)
                         && FloatCore::is_infinite(self.best_metric)
@@ -111,7 +104,5 @@ impl<F: FloatCore> ConvergenceState<F> {
                 }
             }
         }
-
-        events
     }
 }

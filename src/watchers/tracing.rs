@@ -1,71 +1,41 @@
 use num_traits::float::FloatCore;
 use tracing::{debug, info, trace, Level, Value};
 
-use crate::watchers::{ObservationError, Observer, Stage};
+use crate::watchers::{EngineStage, ObservationContext, StateObserver};
 use crate::{State, UserState};
 
-/// A logger using the tracing crate
 #[derive(Clone)]
 pub struct Tracer {
-    /// the logger
     level: Level,
 }
 
 impl Tracer {
     pub fn new(level: Level) -> Self {
         if matches!(level, Level::ERROR | Level::WARN) {
-            panic!("we won't emit non-error messages at ERROR or WARN...");
+            panic!("Tracer only supports INFO/DEBUG/TRACE levels");
         }
         Self { level }
     }
-}
 
-struct TracingState<I>(I);
-
-impl<S> Observer<State<S>> for Tracer
-where
-    S: UserState,
-    S::Float: FloatCore + Value,
-{
-    fn observe(&self, ident: &'static str, subject: &State<S>, stage: Stage) {
-        match stage {
-            Stage::Initialisation => self.observe_initialisation(ident),
-            Stage::WrapUp => self.observe_wrap_up(ident),
-            Stage::Iteration => self.observe_iteration(subject),
+    fn initialisation(&self, ident: &str) {
+        match self.level {
+            Level::INFO => info!("initialising: {}", ident),
+            Level::DEBUG => debug!("initialising: {}", ident),
+            Level::TRACE => trace!("initialising: {}", ident),
+            _ => unreachable!(),
         }
-        .unwrap()
     }
-}
 
-impl Tracer {
-    /// Log basic information about the optimization after initialization.
-    fn observe_initialisation(&self, name: &str) -> Result<(), ObservationError> {
-        // We need to match on the enum rather than using the `event` macro because the `event`
-        // macro requires the event type to be static: it cannot be read from the internal field
+    fn wrap_up(&self, ident: &str) {
         match self.level {
-            Level::INFO => info!("initialising: {}", name),
-            Level::DEBUG => debug!("initialising: {}", name),
-            Level::TRACE => trace!("initialising: {}", name),
-            _ => unreachable!(
-                "constructor should not allow warn or error level events for non-error messages"
-            ),
-        };
-        Ok(())
+            Level::INFO => info!("wrap up: {}", ident),
+            Level::DEBUG => debug!("wrap up: {}", ident),
+            Level::TRACE => trace!("wrap up: {}", ident),
+            _ => unreachable!(),
+        }
     }
 
-    fn observe_wrap_up(&self, name: &str) -> Result<(), ObservationError> {
-        match self.level {
-            Level::INFO => info!("wrap up: {}", name),
-            Level::DEBUG => debug!("wrap up: {}", name),
-            Level::TRACE => trace!("wrap up: {}", name),
-            _ => unreachable!(
-                "constructor should not allow warn or error level events for non-error messages"
-            ),
-        };
-        Ok(())
-    }
-
-    fn observe_iteration<S>(&self, state: &State<S>) -> Result<(), ObservationError>
+    fn iteration<S>(&self, state: &State<S>)
     where
         S: UserState,
         S::Float: FloatCore + Value,
@@ -89,10 +59,25 @@ impl Tracer {
                 current = state.convergence.current(),
                 since_best = state.iterations_since_best(),
             ),
-            _ => unreachable!(
-                "constructor does not allow warn or error level events for non-error messages"
-            ),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<S> StateObserver<S> for Tracer
+where
+    S: UserState,
+    S::Float: FloatCore + Value,
+{
+    fn observe(&self, ident: &'static str, state: &State<S>, ctx: &ObservationContext) {
+        let res = match ctx.stage {
+            EngineStage::Initialisation => self.initialisation(ident),
+            EngineStage::WrapUp => self.wrap_up(ident),
+            EngineStage::Iteration => self.iteration(state),
         };
-        Ok(())
+
+        // if let Err(e) = res {
+        //     eprintln!("Tracer observation error: {e:?}");
+        // }
     }
 }

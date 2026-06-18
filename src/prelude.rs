@@ -5,6 +5,5 @@ pub use crate::GenerateBuilder;
 
 pub use crate::Problem;
 pub use crate::State;
-pub use crate::Target;
 pub use crate::Termination;
 pub use crate::UserState;

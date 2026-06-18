@@ -1,28 +1,18 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
-    progress::ProgressReport,
-    state::{State, UserState},
+    engine::{EngineAction, EngineContext, EventBatch},
     Termination,
 };
 
 pub struct CancellationPolicy;
 
-impl<S> EnginePolicy<S> for CancellationPolicy
-where
-    S: UserState,
-{
-    fn next(
-        &mut self,
-        _state: &State<S>,
-        _events: &[RawEvent<S::Float>],
-        cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        if cancelled {
-            return EngineEvent::TerminationRequested(Termination::Cancelled);
+impl<F> EnginePolicy<F> for CancellationPolicy {
+    fn decide(&mut self, _batch: &EventBatch<F>, context: &EngineContext) -> EngineAction {
+        if context.cancelled {
+            return EngineAction::Stop(Termination::Cancelled);
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

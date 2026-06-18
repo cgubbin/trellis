@@ -1,7 +1,6 @@
 mod convergence;
 mod runtime;
 
-use crate::engine::EngineEvent;
 use crate::progress::ProgressReport;
 use crate::TrellisFloat;
 use convergence::ConvergenceState;
@@ -28,9 +27,6 @@ pub trait UserState: Clone + Default {
 
     // Returns the current parameter value, if one is assigned
     fn get_param(&self) -> Option<&Self::Param>;
-
-    // Called when this iteration was the best iteration seen so far
-    fn on_event(&mut self, event: EngineEvent<Self::Float>) {}
 
     /// Reports progress AFTER update
     fn progress(&self) -> ProgressReport<Self::Float>;

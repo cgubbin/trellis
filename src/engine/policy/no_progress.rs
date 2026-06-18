@@ -1,9 +1,8 @@
 use super::EnginePolicy;
 
 use crate::{
-    engine::{EngineEvent, RawEvent},
-    progress::{Progress, ProgressReport},
-    state::{State, UserState},
+    engine::{EngineAction, EngineContext, EventBatch},
+    progress::Progress,
     Termination,
 };
 
@@ -28,46 +27,35 @@ impl<F> NoProgressPolicy<F> {
     }
 }
 
-impl<S> EnginePolicy<S> for NoProgressPolicy<S::Float>
+impl<F> EnginePolicy<F> for NoProgressPolicy<F>
 where
-    S: UserState,
-    <S as UserState>::Float: FloatCore,
+    F: FloatCore,
 {
-    fn next(
-        &mut self,
-        _state: &State<S>,
-        events: &[RawEvent<S::Float>],
-        _cancelled: bool,
-    ) -> EngineEvent<S::Float> {
-        for each in events {
-            match each {
-                RawEvent::Progress(progress) => {
-                    let value = match progress {
-                        Progress::Metric { value } => value,
-                        Progress::ErrorEstimate { absolute, .. } => absolute,
-                        _ => continue,
-                    };
+    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
+        for each in &batch.events {
+            let value = match each {
+                Progress::Metric { value } => value,
+                Progress::ErrorEstimate { absolute, .. } => absolute,
+                _ => continue,
+            };
 
-                    if let Some(previous) = self.last_value {
-                        let improvement = (previous - *value).abs();
+            if let Some(previous) = self.last_value {
+                let improvement = (previous - *value).abs();
 
-                        if improvement < self.tolerance {
-                            self.counter += 1;
-                        } else {
-                            self.counter = 0;
-                        }
-                    }
-
-                    self.last_value = Some(*value);
-
-                    if self.counter >= self.patience {
-                        return EngineEvent::TerminationRequested(Termination::Stagnated);
-                    }
+                if improvement < self.tolerance {
+                    self.counter += 1;
+                } else {
+                    self.counter = 0;
                 }
-                _ => {}
+            }
+
+            self.last_value = Some(*value);
+
+            if self.counter >= self.patience {
+                return EngineAction::Stop(Termination::Stagnated);
             }
         }
 
-        EngineEvent::Pass
+        EngineAction::Continue
     }
 }

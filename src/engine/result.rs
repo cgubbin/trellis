@@ -15,13 +15,13 @@ where
 }
 
 #[derive(thiserror::Error, Debug)]
-pub struct EngineFailure<E, S>
+pub enum EngineFailure<E, C, S>
 where
     S: UserState,
     <S as UserState>::Float: TrellisFloat,
 {
-    pub error: E,
-    pub state: State<S>,
+    Procedure { error: E, state: State<S> },
+    Checkpoint { error: C, state: State<S> },
 }
 
-pub type EngineResult<O, S, E> = Result<EngineOutput<O, S>, EngineFailure<E, S>>;
+pub type EngineResult<O, S, E, C> = Result<EngineOutput<O, S>, EngineFailure<E, C, S>>;

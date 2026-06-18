@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-mod controller;
 mod procedure;
 
 mod engine;
@@ -12,14 +11,13 @@ mod watchers;
 
 mod state;
 
-pub(crate) use controller::Control;
 pub use procedure::Procedure;
 
 pub use engine::{CancellationGuard, GenerateBuilder, Termination};
 pub use problem::Problem;
 pub use result::{Output, TrellisError};
 pub use state::{State, UserState};
-pub use watchers::{Frequency, Target};
+pub use watchers::Frequency;
 
 pub use web_time::Duration;
 

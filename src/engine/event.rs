@@ -1,29 +1,16 @@
 use crate::progress::Progress;
 use crate::Termination;
 
-#[derive(PartialEq)]
-pub enum RawEvent<F> {
-    Progress(Progress<F>),
+use std::time::Duration;
 
-    Iteration { iter: usize },
-
-    ErrorUpdated { value: F },
+pub struct EventBatch<F> {
+    pub events: Vec<Progress<F>>,
 }
 
-pub enum EngineEvent<F> {
-    Progress(Progress<F>),
+pub enum EngineAction {
+    Continue,
 
-    BestImproved,
+    Step,
 
-    NoImprovementWindow { window: usize },
-
-    Converged,
-
-    Stagnated,
-
-    TerminationRequested(Termination),
-
-    CheckpointRequested,
-
-    Pass,
+    Stop(Termination),
 }
