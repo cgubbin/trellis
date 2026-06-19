@@ -104,7 +104,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::default().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Metric { value: v })
     }
 
     #[test]
@@ -112,21 +112,21 @@ mod test {
         let mut stack = PolicyStack::<f64>::new().add(NoProgressPolicy::new(0.1, 3));
 
         // first: establish baseline
-        let batch1 = EventBatch::default().add(Progress::Metric { value: 10.0 });
+        let batch1 = EventBatch::new().add(Progress::Metric { value: 10.0 });
 
         let ctx = EngineContext::default();
         let _ = stack.decide(&batch1, &ctx);
 
         // repeated poor improvement
         for _ in 0..2 {
-            let batch = EventBatch::default().add(Progress::Metric { value: 9.95 }); // small improvement
+            let batch = EventBatch::new().add(Progress::Metric { value: 9.95 }); // small improvement
 
             let res = stack.decide(&batch, &ctx);
             assert!(matches!(res, crate::engine::EngineAction::Continue));
         }
 
         // real improvement resets
-        let reset_batch = EventBatch::default().add(Progress::Metric { value: 8.0 });
+        let reset_batch = EventBatch::new().add(Progress::Metric { value: 8.0 });
 
         let res = stack.decide(&reset_batch, &ctx);
         assert!(matches!(res, crate::engine::EngineAction::Continue));
@@ -152,7 +152,7 @@ mod test {
     fn ignores_non_numeric_events() {
         let mut p = NoProgressPolicy::new(0.1, 2);
 
-        let mut b = EventBatch::default();
+        let mut b = EventBatch::new();
         b.events.push(Progress::Complete);
 
         let ctx = EngineContext::default();

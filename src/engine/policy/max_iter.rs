@@ -53,7 +53,7 @@ mod test {
     fn max_iteration_policy_terminates_when_iter_exceeds_limit() {
         let mut stack = PolicyStack::<f64>::new().add(MaxIterationPolicy::new(100));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 101,
             ..Default::default()
@@ -69,7 +69,7 @@ mod test {
     fn max_iteration_policy_does_not_terminate_when_iter_is_less_than_limit() {
         let mut stack = PolicyStack::<f64>::new().add(MaxIterationPolicy::new(100));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 99,
             ..Default::default()

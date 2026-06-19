@@ -1,43 +1,17 @@
 mod convergence;
 mod runtime;
+mod user;
 mod view;
 
-use crate::progress::ProgressReport;
 use crate::TrellisFloat;
 use convergence::ConvergenceState;
 use runtime::RuntimeState;
 
+pub use user::{Snapshotable, UserState};
 pub(crate) use view::StateView;
 
 use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
-
-/// The user-defined state must implement this trait to be used as part of the trellis calculation
-/// loop
-///
-/// All other state methods are auto-implemented on a type wrapping the user-defined state.
-///
-/// TODO: At the moment we have a clone bound here to enable checkpointing. This is not ideal
-/// because the user state could be large. In future we may want to introduce a new trait:
-/// pub trait Checkpointable {
-///    type Checkpoint;
-///
-///    fn checkpoint(&self) -> Self::Checkpoint;
-///    }
-/// Which could be implemented or not for a given state.
-pub trait UserState: Clone + Default {
-    type Float: TrellisFloat;
-    type Param;
-    type Snapshot: Clone;
-
-    // Returns the current parameter value, if one is assigned
-    fn get_param(&self) -> Option<&Self::Param>;
-
-    /// Reports progress AFTER update
-    fn progress(&self) -> ProgressReport<Self::Float>;
-
-    fn snapshot(&self) -> Self::Snapshot;
-}
 
 /// The state of the [`trellis`] solver
 ///

@@ -6,7 +6,7 @@ use std::io::{BufWriter, Write};
 use std::sync::{Arc, Mutex};
 
 use super::Observe;
-use crate::engine::EngineEvent;
+use crate::engine::EngineSignal;
 use crate::progress::Progress;
 use crate::state::{StateView, UserState};
 
@@ -66,8 +66,8 @@ where
     S: UserState + Send + Sync,
     W: Write + Send,
 {
-    fn observe(&self, name: &'static str, state: StateView<'_, S>, event: &EngineEvent<S::Float>) {
-        if let EngineEvent::Progress(progress) = event {
+    fn observe(&self, name: &'static str, state: StateView<'_, S>, event: &EngineSignal<S::Float>) {
+        if let EngineSignal::Progress(progress) = event {
             let iteration = state.iteration();
             let row = match progress {
                 Progress::Metric { value } => Row {

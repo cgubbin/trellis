@@ -60,7 +60,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::default().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Metric { value: v })
     }
 
     #[test]

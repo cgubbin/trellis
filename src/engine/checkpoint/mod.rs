@@ -6,7 +6,11 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+mod in_memory;
 mod json;
+
+pub use in_memory::InMemoryCheckpointStore;
+pub use json::JsonCheckpointStore;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CheckpointError {

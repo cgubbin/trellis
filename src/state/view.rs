@@ -6,20 +6,12 @@ use std::time::Duration;
 
 #[derive(Copy, Clone)]
 pub struct StateView<'a, S: UserState> {
-    convergence: &'a ConvergenceState<S::Float>,
-    runtime: &'a RuntimeState,
-    snapshot: S::Snapshot,
-    phantom: std::marker::PhantomData<S>,
+    state: &'a State<S>,
 }
 
 impl<'a, S: UserState> StateView<'a, S> {
     pub(crate) fn new(state: &'a State<S>) -> Self {
-        Self {
-            convergence: &state.convergence,
-            runtime: &state.runtime,
-            snapshot: state.user.snapshot(),
-            phantom: std::marker::PhantomData,
-        }
+        Self { state }
     }
 }
 
@@ -29,31 +21,32 @@ where
     <S as UserState>::Float: FloatCore,
 {
     pub fn iteration(&self) -> usize {
-        self.runtime.iteration()
+        self.state.runtime.iteration()
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        self.runtime.duration().copied()
+        self.state.runtime.duration().copied()
     }
 
     pub fn termination(&self) -> Option<Termination> {
-        self.runtime.termination()
+        self.state.runtime.termination()
     }
 
     pub fn best_measure(&self) -> S::Float {
-        self.convergence.best()
+        self.state.convergence.best()
     }
 
     pub fn current_measure(&self) -> S::Float {
-        self.convergence.current()
+        self.state.convergence.current()
     }
 
     pub fn iterations_since_best(&self) -> usize {
-        self.convergence
-            .iterations_since_best(self.runtime.iteration())
+        self.state
+            .convergence
+            .iterations_since_best(self.state.runtime.iteration())
     }
 
-    pub fn snapshot(&self) -> &S::Snapshot {
-        &self.snapshot
+    pub fn user(&self) -> &S {
+        &self.state.user
     }
 }

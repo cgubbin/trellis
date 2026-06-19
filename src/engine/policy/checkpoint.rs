@@ -54,7 +54,7 @@ mod test {
     fn checkpoint_policy_requests_checkpoint_on_schedule() {
         let mut stack = PolicyStack::<f64>::new().add(CheckpointPolicy::every(10));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 10,
             ..Default::default()
@@ -70,7 +70,7 @@ mod test {
     fn checkpoint_policy_does_not_request_checkpoint_when_not_on_schedule() {
         let mut stack = PolicyStack::<f64>::new().add(CheckpointPolicy::every(10));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 11,
             ..Default::default()

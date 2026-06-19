@@ -1,4 +1,4 @@
-use crate::engine::EngineEvent;
+use crate::engine::EngineSignal;
 use crate::state::{StateView, UserState};
 use crate::Termination;
 
@@ -9,7 +9,17 @@ mod tracing;
 use std::sync::{Arc, Mutex};
 
 pub trait Observe<S: UserState>: Send + Sync {
-    fn observe(&self, name: &'static str, state: StateView<'_, S>, event: &EngineEvent<S::Float>);
+    fn observe(&self, name: &'static str, state: StateView<'_, S>, event: &EngineSignal<S::Float>);
+}
+
+impl<S, T> Observe<S> for Arc<T>
+where
+    S: UserState,
+    T: Observe<S> + ?Sized,
+{
+    fn observe(&self, ident: &'static str, state: StateView<S>, event: &EngineSignal<S::Float>) {
+        (**self).observe(ident, state, event)
+    }
 }
 
 pub struct Observers<S> {
@@ -29,7 +39,7 @@ impl<S: UserState> Observers<S> {
         &self,
         ident: &'static str,
         state: StateView<'_, S>,
-        event: &EngineEvent<S::Float>,
+        event: &EngineSignal<S::Float>,
     ) {
         for (obs, freq) in &self.inner {
             if freq.should_run(event, state.iteration()) {
@@ -49,11 +59,11 @@ pub enum Frequency {
 }
 
 impl Frequency {
-    fn should_run<F>(&self, event: &EngineEvent<F>, iteration: usize) -> bool {
+    fn should_run<F>(&self, event: &EngineSignal<F>, iteration: usize) -> bool {
         match self {
             Self::Never => false,
             Self::Always => true,
-            Self::OnExit => matches!(event, EngineEvent::Termination(_)),
+            Self::OnExit => matches!(event, EngineSignal::Termination(_)),
             Self::Every(n) if iteration % n == 0 => true,
             Self::Every(_) => false,
         }

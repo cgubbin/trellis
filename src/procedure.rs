@@ -42,7 +42,7 @@ pub trait Procedure {
         guard: CancellationGuard<'_>,
     ) -> Result<(), Self::Error>;
 
-    fn is_finished(&self, state: Self::State) -> bool;
+    fn is_finished(&self, state: &Self::State) -> bool;
 
     /// Converts the internal state to the user-facing return datatype
     fn finalise(

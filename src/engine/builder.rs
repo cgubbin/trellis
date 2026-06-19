@@ -1,3 +1,57 @@
+//! # Engine Builder API
+//!
+//! This module provides a fluent builder for constructing and configuring an [`Engine`].
+//!
+//! The builder is responsible for assembling all runtime components:
+//!
+//! - numerical procedure (`Procedure`)
+//! - initial state (`State`)
+//! - policy stack (`PolicyStack`)
+//! - observers (`Observe` implementations)
+//! - cancellation handling
+//! - optional checkpoint storage
+//!
+//! ## Design philosophy
+//!
+//! The builder is intentionally *immutable-by-transformation*:
+//! each method consumes `self` and returns a modified builder.
+//!
+//! This ensures:
+//! - predictable construction flow
+//! - no shared mutable setup state
+//! - easy composability of configurations
+//!
+//! ## Minimal usage
+//!
+//! ```ignore
+//! let engine = MyProcedure::new()
+//!     .build_for(problem)
+//!     .finalise();
+//! ```
+//!
+//! ## With configuration
+//!
+//! ```ignore
+//! let engine = MyProcedure::new()
+//!     .build_for(problem)
+//!     .time(true)
+//!     .with_default_policies(max_iter, absolute_tolerance)
+//!     .and_policy(my_policy)
+//!     .attach_observer(my_tracer, Frequency::Always)
+//!     .finalise();
+//! ```
+//!
+//! ## Checkpointing
+//!
+//! Checkpointing is optional and provided via a backend store:
+//!
+//! ```ignore
+//! let engine = MyProcedure::new()
+//!     .build_for(problem)
+//!     .with_checkpoint_store(FileCheckpointStore::new(path))
+//!     .finalise();
+//! ```
+//!
 use num_traits::float::FloatCore;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
@@ -59,7 +113,7 @@ where
     checkpoint_store: Option<C>,
 }
 
-impl<P> Builder<P, ()>
+impl<P> Builder<P, NoCheckpoint>
 where
     P: Procedure,
     P::State: UserState,
@@ -131,34 +185,32 @@ where
         self
     }
 
+    #[must_use]
+    pub fn with_default_policies(
+        mut self,
+        max_iter: usize,
+        absolute_tolerance: <P::State as UserState>::Float,
+    ) -> Self {
+        self.policies = self
+            .policies
+            .merge(PolicyStack::standard(max_iter, absolute_tolerance));
+        self
+    }
+
     /// Finalise with default policy
-    pub fn finalise(self) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C>
+    pub fn finalise(mut self) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C>
     where
         <P::State as UserState>::Float: num_traits::FromPrimitive,
     {
-        let policies = if self.policies.is_empty() {
-            PolicyStack::standard(
-                1000,
-                <<P::State as UserState>::Float as num_traits::FromPrimitive>::from_f64(1e-7)
-                    .unwrap(),
-            )
-        } else {
-            PolicyStack::new()
-        };
-        self.finalise_with(policies)
-    }
-
-    /// Finalise with custom policy
-    pub fn finalise_with(
-        self,
-        policy: PolicyStack<<P::State as UserState>::Float>,
-    ) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C> {
         let cancellation = self.cancellation_token.unwrap_or_default();
 
         #[cfg(feature = "ctrlc")]
         {
+            let token = cancellation.clone();
             ctrlc::set_handler(move || {
-                token.cancel();
+                if let Some(t) = &token {
+                    t.cancel();
+                }
             })
             .unwrap();
         }
@@ -173,14 +225,49 @@ where
 
             cancellation,
 
-            policy: self.policies.merge(policy),
+            policy: self.policies,
 
             observers: self.observers,
             checkpoint_store: self.checkpoint_store,
         }
     }
 
-    pub fn resume_from_checkpoint(mut self) -> Result<Self, CheckpointError>
+    /// Finalise with custom policy
+    pub fn finalise_with(
+        self,
+        policy: PolicyStack<<P::State as UserState>::Float>,
+    ) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C> {
+        let cancellation = self.cancellation_token.unwrap_or_default();
+
+        #[cfg(feature = "ctrlc")]
+        {
+            let token = cancellation.clone();
+            ctrlc::set_handler(move || {
+                if let Some(t) = &token {
+                    t.cancel();
+                }
+            })
+            .unwrap();
+        }
+
+        Engine {
+            procedure: self.procedure,
+            problem: crate::Problem::new(self.problem),
+            state: Some(self.state),
+
+            time: self.time,
+            start_time: None,
+
+            cancellation,
+
+            policy,
+
+            observers: self.observers,
+            checkpoint_store: self.checkpoint_store,
+        }
+    }
+
+    pub fn with_checkpoint_resumed(mut self) -> Result<Self, CheckpointError>
     where
         C: CheckpointStore<P::State>,
     {

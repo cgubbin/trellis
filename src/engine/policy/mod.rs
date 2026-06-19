@@ -190,7 +190,7 @@ mod tests {
     fn empty_stack_continues() {
         let mut stack = PolicyStack::<f64>::new();
 
-        let batch: EventBatch<f64> = EventBatch::default();
+        let batch: EventBatch<f64> = EventBatch::new();
 
         let ctx = EngineContext::default();
 
@@ -203,7 +203,7 @@ mod tests {
             .add(CheckpointPolicy::every(10))
             .add(MaxIterationPolicy::new(500));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 10,
             ..Default::default()
@@ -221,7 +221,7 @@ mod tests {
             .add(CheckpointPolicy::every(10))
             .add(MaxIterationPolicy::new(0));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             iter: 10,
             ..Default::default()
@@ -231,12 +231,33 @@ mod tests {
     }
 
     #[test]
+    fn policy_stack_stop_overrides_all() {
+        let mut stack = PolicyStack::new()
+            .add(NoProgressPolicy::new(0.1, 10))
+            .add(MaxIterationPolicy::new(100));
+
+        let batch = EventBatch::new().add(Progress::Complete);
+        let ctx = EngineContext {
+            iter: 101,
+            ..Default::default()
+        };
+
+        let action = stack.decide(&batch, &ctx);
+
+        if let EngineAction::Stop(_) = action {
+            assert!(true);
+        } else {
+            panic!("Stop must dominate all policies");
+        }
+    }
+
+    #[test]
     fn integration_converges_via_tolerance() {
         let mut stack = PolicyStack::<f64>::optimisation(100, 0.01, 5);
 
         let ctx = EngineContext::default();
 
-        let batch = EventBatch::default().add(Progress::ErrorEstimate {
+        let batch = EventBatch::new().add(Progress::ErrorEstimate {
             absolute: 0.001,
             relative: 0.2,
         });
@@ -258,7 +279,7 @@ mod tests {
         let ctx = EngineContext::default();
 
         for _ in 0..10 {
-            let batch = EventBatch::default().add(Progress::Metric { value: 1.0 });
+            let batch = EventBatch::new().add(Progress::Metric { value: 1.0 });
 
             let action = stack.decide(&batch, &ctx);
 
@@ -272,7 +293,7 @@ mod tests {
     fn integration_timeout_trumps_all() {
         let mut stack = PolicyStack::<f64>::timed(Duration::from_secs(1));
 
-        let batch = EventBatch::default().add(Progress::Complete);
+        let batch = EventBatch::new().add(Progress::Complete);
 
         let ctx = EngineContext {
             elapsed: Duration::from_secs(10),

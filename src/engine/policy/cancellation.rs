@@ -47,7 +47,7 @@ mod test {
     fn cancellation_policy_stops_when_cancelled() {
         let mut stack = PolicyStack::<f64>::new().add(CancellationPolicy);
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             cancelled: true,
             ..Default::default()
@@ -60,7 +60,7 @@ mod test {
     fn cancellation_policy_runs_when_not_cancelled() {
         let mut stack = PolicyStack::<f64>::new().add(CancellationPolicy);
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             cancelled: false,
             ..Default::default()

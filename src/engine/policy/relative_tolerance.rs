@@ -86,7 +86,7 @@ mod tests {
     fn relative_tolerance_stops_on_small_relative_error() {
         let mut stack = PolicyStack::<f64>::new().add(RelativeTolerancePolicy::new(0.1));
 
-        let batch = EventBatch::default().add(Progress::ErrorEstimate {
+        let batch = EventBatch::new().add(Progress::ErrorEstimate {
             absolute: 0.5,
             relative: 0.05,
         });
@@ -103,7 +103,7 @@ mod tests {
     fn relative_tolerance_continues_when_large() {
         let mut stack = PolicyStack::<f64>::new().add(RelativeTolerancePolicy::new(0.1));
 
-        let batch = EventBatch::default().add(Progress::ErrorEstimate {
+        let batch = EventBatch::new().add(Progress::ErrorEstimate {
             absolute: 0.5,
             relative: 0.5,
         });

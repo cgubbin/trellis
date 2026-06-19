@@ -88,7 +88,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::default().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Metric { value: v })
     }
 
     #[test]
@@ -125,7 +125,7 @@ mod test {
         let seq = vec![1.0, 1.0001, 1.0002, 2.0];
 
         for v in seq {
-            let batch = EventBatch::default().add(Progress::Metric { value: v });
+            let batch = EventBatch::new().add(Progress::Metric { value: v });
 
             let res = stack.decide(&batch, &ctx);
 

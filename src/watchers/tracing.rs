@@ -1,7 +1,7 @@
 use num_traits::float::FloatCore;
 use tracing::{debug, info, trace, Level, Value};
 
-use crate::engine::{EngineEvent, Termination};
+use crate::engine::{EngineSignal, Termination};
 use crate::progress::Progress;
 use crate::state::{StateView, UserState};
 use crate::watchers::Observe;
@@ -91,21 +91,26 @@ where
     S: UserState,
     S::Float: FloatCore + Value,
 {
-    fn observe(&self, ident: &'static str, state: StateView<'_, S>, event: &EngineEvent<S::Float>) {
+    fn observe(
+        &self,
+        ident: &'static str,
+        state: StateView<'_, S>,
+        event: &EngineSignal<S::Float>,
+    ) {
         match event {
-            EngineEvent::Initialised => {
+            EngineSignal::Initialised => {
                 self.lifecycle("initialising", ident);
             }
 
-            EngineEvent::CheckpointSaved => {
+            EngineSignal::CheckpointSaved => {
                 self.lifecycle("checkpoint saved", ident);
             }
 
-            EngineEvent::Termination(reason) => {
+            EngineSignal::Termination(reason) => {
                 self.termination(ident, *reason);
             }
 
-            EngineEvent::Progress(progress) => {
+            EngineSignal::Progress(progress) => {
                 self.progress(state, progress);
             }
         }

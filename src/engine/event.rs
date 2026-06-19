@@ -11,13 +11,17 @@ use crate::Termination;
 /// - stagnation
 /// - checkpointing
 /// - termination
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct EventBatch<F> {
     /// All progress signals emitted during the current iteration.
     pub events: Vec<Progress<F>>,
 }
 
 impl<F> EventBatch<F> {
+    /// Generate and empty batch
+    pub fn new() -> Self {
+        Self { events: vec![] }
+    }
     /// Adds a progress event to the batch.
     pub fn add(mut self, event: Progress<F>) -> Self {
         self.events.push(event);
@@ -74,7 +78,7 @@ pub enum CheckpointReason {
 /// - UI updates
 ///
 /// They are distinct from [`Progress`], which represents *numerical solver signals*.
-pub enum EngineEvent<F> {
+pub enum EngineSignal<F> {
     /// Engine has completed initialisation and is ready to iterate.
     Initialised,
 
@@ -88,7 +92,7 @@ pub enum EngineEvent<F> {
     Termination(Termination),
 }
 
-impl<F> EngineEvent<F> {
+impl<F> EngineSignal<F> {
     /// Returns a stable string tag identifying the event kind.
     pub fn as_tag(&self) -> &'static str {
         match self {
@@ -97,5 +101,18 @@ impl<F> EngineEvent<F> {
             Self::CheckpointSaved => "checkpoint_saved",
             Self::Termination(_) => "termination",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn event_batch_accumulates_events() {
+        let batch = EventBatch::new()
+            .add(Progress::Metric { value: 1.0 })
+            .add(Progress::Metric { value: 2.0 });
+
+        assert_eq!(batch.events.len(), 2);
     }
 }

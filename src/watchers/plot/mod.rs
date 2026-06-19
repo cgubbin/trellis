@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::engine::EngineEvent;
+use crate::engine::EngineSignal;
 use crate::state::StateView;
 use crate::watchers::Observe;
 
@@ -31,9 +31,9 @@ impl PlotObserver {
         self
     }
 
-    fn should_run<F>(&self, event: EngineEvent<F>) -> bool {
+    fn should_run<F>(&self, event: EngineSignal<F>) -> bool {
         if self.only_on_wrapup {
-            matches!(event, EngineEvent::Termination(_))
+            matches!(event, EngineSignal::Termination(_))
         } else {
             true
         }
@@ -48,10 +48,10 @@ where
         &self,
         _ident: &'static str,
         _state: StateView<'_, S>,
-        event: &EngineEvent<S::Float>,
+        event: &EngineSignal<S::Float>,
     ) {
         match event {
-            EngineEvent::Termination(..) => {
+            EngineSignal::Termination(..) => {
                 // Only meaningful at end-of-run (or full tracing mode)
                 if let Err(e) = plot_csv(&self.csv_path, &self.output_dir) {
                     // Observers should not fail the engine.

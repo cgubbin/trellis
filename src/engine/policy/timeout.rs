@@ -55,7 +55,7 @@ mod test {
     fn timeout_policy_terminates_for_durations_greater_than_limit() {
         let mut stack = PolicyStack::<f64>::new().add(TimeoutPolicy::new(Duration::new(5, 0)));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             elapsed: Duration::new(6, 0),
             ..Default::default()
@@ -71,7 +71,7 @@ mod test {
     fn timeout_policy_continues_for_durations_less_than_limit() {
         let mut stack = PolicyStack::<f64>::new().add(TimeoutPolicy::new(Duration::new(5, 0)));
 
-        let batch: EventBatch<f64> = EventBatch::default().add(Progress::Complete);
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Complete);
         let ctx = EngineContext {
             elapsed: Duration::new(4, 0),
             ..Default::default()

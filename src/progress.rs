@@ -6,12 +6,6 @@ pub enum Progress<F> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ProgressReport<F> {
-    pub measure: Progress<F>,
-    pub diagnostics: ProgressDiagnostics<F>,
-}
-
-#[derive(Clone, Debug)]
 pub struct ProgressDiagnostics<F> {
     pub gradient_norm: Option<F>,
     pub step_size: Option<F>,
