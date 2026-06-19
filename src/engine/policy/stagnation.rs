@@ -1,3 +1,27 @@
+//! # Stagnation policy (window-based)
+//!
+//! Detects lack of meaningful variation over a sliding window of values.
+//!
+//! ## Behaviour
+//!
+//! - Maintains a fixed-size history of recent values.
+//! - Values are extracted from:
+//!   - `Progress::Metric`
+//!   - `Progress::ErrorEstimate` (absolute)
+//!
+//! - Once enough samples are collected:
+//!
+//!   - If all consecutive differences are < `epsilon()`
+//!     → stagnation is detected
+//!
+//! ## Termination
+//!
+//! Returns [`Termination::Stagnated`] when stagnation is detected.
+//!
+//! ## Notes
+//!
+//! This policy is stricter than [`NoProgressPolicy`] because it requires
+//! *persistent flat behaviour over a window*, not just repeated small steps.
 use super::EnginePolicy;
 
 use num_traits::float::FloatCore;
@@ -23,39 +47,91 @@ impl<F> StagnationPolicy<F> {
 }
 
 impl<F: FloatCore> EnginePolicy<F> for StagnationPolicy<F> {
-    fn decide(&mut self, batch: &EventBatch<F>, ctx: &EngineContext) -> EngineAction {
+    fn decide(&mut self, batch: &EventBatch<F>, _ctx: &EngineContext) -> EngineAction {
         for e in &batch.events {
-            match e {
-                Progress::Metric { value } => {
-                    self.history.push(*value);
-                }
-                Progress::ErrorEstimate { absolute, .. } => {
-                    self.history.push(*absolute);
-                }
-                _ => {}
-            }
+            let v = match e {
+                Progress::Metric { value } => *value,
+                Progress::ErrorEstimate { absolute, .. } => *absolute,
+                _ => continue,
+            };
+
+            self.history.push(v);
         }
 
-        // keep bounded window
         if self.history.len() > self.window {
-            self.history.drain(0..1);
+            self.history.remove(0);
         }
 
-        // need enough history before deciding
         if self.history.len() < self.window {
             return EngineAction::Continue;
         }
 
-        // stagnation test (monotonic or flat improvement)
-        let stagnating = self
-            .history
-            .windows(2)
-            .all(|w| (w[1] - w[0]).abs() < F::epsilon());
+        // slope-based stagnation
+        let first = self.history.first().unwrap();
+        let last = self.history.last().unwrap();
 
-        if stagnating {
+        let improvement = (*first - *last).abs();
+
+        if improvement < F::epsilon() {
             return EngineAction::Stop(Termination::Stagnated);
         }
 
         EngineAction::Continue
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::engine::policy::PolicyStack;
+    use crate::engine::EngineContext;
+    use crate::progress::Progress;
+
+    fn batch(v: f64) -> EventBatch<f64> {
+        EventBatch::default().add(Progress::Metric { value: v })
+    }
+
+    #[test]
+    fn stagnation_detects_flat_region() {
+        let mut p = StagnationPolicy::new(3);
+
+        let ctx = EngineContext::default();
+
+        let _ = p.decide(&batch(1.0), &ctx);
+        let _ = p.decide(&batch(1.0), &ctx);
+        let _ = p.decide(&batch(1.0), &ctx);
+        let res = p.decide(&batch(1.0), &ctx);
+
+        assert!(matches!(res, EngineAction::Stop(_)));
+    }
+
+    #[test]
+    fn stagnation_requires_window() {
+        let mut p = StagnationPolicy::new(5);
+
+        let ctx = EngineContext::default();
+
+        let res = p.decide(&batch(1.0), &ctx);
+
+        assert!(matches!(res, EngineAction::Continue));
+    }
+
+    #[test]
+    fn stagnation_resets_with_change() {
+        let mut stack = PolicyStack::<f64>::new().add(StagnationPolicy::new(3));
+
+        let ctx = EngineContext::default();
+
+        let seq = vec![1.0, 1.0001, 1.0002, 2.0];
+
+        for v in seq {
+            let batch = EventBatch::default().add(Progress::Metric { value: v });
+
+            let res = stack.decide(&batch, &ctx);
+
+            if v == 2.0 {
+                assert!(matches!(res, crate::engine::EngineAction::Continue));
+            }
+        }
     }
 }

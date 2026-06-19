@@ -1,10 +1,10 @@
 use std::fs::File;
 
-use super::{ObservationContext, StateObserver};
+use super::Observe;
 
 use crate::{
-    engine::{Checkpoint, EngineStage},
-    state::{State, UserState},
+    engine::{Checkpoint, EngineEvent, EngineStage},
+    state::{StateView, UserState},
 };
 
 use std::path::PathBuf;
@@ -92,16 +92,23 @@ impl<STORE> CheckpointObserver<STORE> {
     }
 }
 
-impl<S, STORE> StateObserver<S> for CheckpointObserver<STORE>
+impl<S, STORE> Observe<S> for CheckpointObserver<STORE>
 where
     S: UserState,
     STORE: CheckpointStore<S> + Send + Sync,
 {
-    fn observe(&self, _ident: &'static str, state: &State<S>, _ctx: &ObservationContext) {
-        let checkpoint = Checkpoint::new(state);
-        let _ = self.store.save(checkpoint);
-    }
-    fn should_observe(&self, stage: EngineStage) -> bool {
-        stage == EngineStage::Checkpoint
+    fn observe(
+        &self,
+        _ident: &'static str,
+        state: StateView<'_, S>,
+        event: &EngineEvent<S::Float>,
+    ) {
+        match event {
+            EngineEvent::Stage(EngineStage::Checkpoint) => {
+                let checkpoint = Checkpoint::new(state);
+                let _ = self.store.save(checkpoint);
+            }
+            _ => {}
+        }
     }
 }

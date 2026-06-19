@@ -12,7 +12,7 @@ pub enum PlotKind {
     Metric,
 }
 
-fn value_for(kind: PlotKind, row: &Row) -> Option<f64> {
+fn value_for<F: Copy>(kind: PlotKind, row: &Row<F>) -> Option<F> {
     match kind {
         PlotKind::Absolute => row.absolute,
         PlotKind::Relative => row.relative,
@@ -40,7 +40,7 @@ pub fn plot_csv(
     csv_file: impl AsRef<Path>,
     output_dir: impl AsRef<Path>,
 ) -> Result<(), Box<dyn Error>> {
-    let rows = load_csv(csv_file)?;
+    let rows: Vec<Row<f64>> = load_csv(csv_file)?;
 
     plot_kind(&rows, output_dir.as_ref(), PlotKind::Absolute)?;
     plot_kind(&rows, output_dir.as_ref(), PlotKind::Relative)?;
@@ -49,7 +49,7 @@ pub fn plot_csv(
     Ok(())
 }
 
-fn plot_kind(rows: &[Row], output_dir: &Path, kind: PlotKind) -> Result<(), Box<dyn Error>> {
+fn plot_kind(rows: &[Row<f64>], output_dir: &Path, kind: PlotKind) -> Result<(), Box<dyn Error>> {
     let mut series: BTreeMap<String, Vec<(usize, f64)>> = BTreeMap::new();
 
     for row in rows {

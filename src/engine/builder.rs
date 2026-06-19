@@ -4,10 +4,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::engine::policy::{EnginePolicy, PolicyStack};
 use crate::{
-    engine::Engine,
-    watchers::{
-        Frequency, Observers, ProgressObserver, ProgressObservers, StateObserver, StateObservers,
+    engine::{
+        checkpoint::{CheckpointError, CheckpointStore, NoCheckpoint},
+        Engine,
     },
+    watchers::{Frequency, Observe, Observers},
     Procedure, State, UserState,
 };
 
@@ -15,7 +16,7 @@ pub trait GenerateBuilder: Sized + Procedure
 where
     Self::State: UserState,
 {
-    fn build_for(self, problem: Self::Problem) -> Builder<Self>;
+    fn build_for(self, problem: Self::Problem) -> Builder<Self, NoCheckpoint>;
 }
 
 impl<P> GenerateBuilder for P
@@ -24,7 +25,7 @@ where
     P::State: UserState,
     <P::State as UserState>::Float: FloatCore,
 {
-    fn build_for(self, problem: Self::Problem) -> Builder<Self> {
+    fn build_for(self, problem: Self::Problem) -> Builder<Self, NoCheckpoint> {
         Builder {
             procedure: self,
             problem,
@@ -32,15 +33,16 @@ where
             time: true,
             cancellation_token: None,
 
-            state_observers: StateObservers::new(),
-            progress_observers: ProgressObservers::new(),
+            observers: Observers::new(),
 
             policies: PolicyStack::new(),
+
+            checkpoint_store: None,
         }
     }
 }
 
-pub struct Builder<P>
+pub struct Builder<P, C>
 where
     P: Procedure,
     P::State: UserState,
@@ -51,13 +53,37 @@ where
     time: bool,
     cancellation_token: Option<CancellationToken>,
 
-    state_observers: StateObservers<P::State>,
-    progress_observers: ProgressObservers<<P::State as UserState>::Float>,
+    observers: Observers<P::State>,
 
     policies: PolicyStack<<P::State as UserState>::Float>,
+    checkpoint_store: Option<C>,
 }
 
-impl<P> Builder<P>
+impl<P> Builder<P, ()>
+where
+    P: Procedure,
+    P::State: UserState,
+    <P::State as UserState>::Float: FloatCore + 'static,
+{
+    #[must_use]
+    pub fn with_checkpoint_store<C: CheckpointStore<P::State>>(
+        mut self,
+        checkpoint_store: C,
+    ) -> Builder<P, C> {
+        Builder {
+            procedure: self.procedure,
+            problem: self.problem,
+            state: self.state,
+            time: self.time,
+            cancellation_token: self.cancellation_token,
+            observers: self.observers,
+            policies: self.policies,
+            checkpoint_store: Some(checkpoint_store),
+        }
+    }
+}
+
+impl<P, C> Builder<P, C>
 where
     P: Procedure,
     P::State: UserState,
@@ -81,22 +107,11 @@ where
 
     /// Attach a state observer (full state + stage awareness)
     #[must_use]
-    pub fn attach_state_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
+    pub fn attach_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
     where
-        OBS: StateObserver<P::State> + 'static,
+        OBS: Observe<P::State> + 'static,
     {
-        self.state_observers
-            .attach(Arc::new(Mutex::new(observer)), frequency);
-        self
-    }
-
-    /// Attach a progress observer (lightweight per-iteration stream)
-    #[must_use]
-    pub fn attach_progress_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
-    where
-        OBS: ProgressObserver<<P::State as UserState>::Float> + 'static,
-    {
-        self.progress_observers
+        self.observers
             .attach(Arc::new(Mutex::new(observer)), frequency);
         self
     }
@@ -117,12 +132,12 @@ where
     }
 
     /// Finalise with default policy
-    pub fn finalise(self) -> Engine<P>
+    pub fn finalise(self) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C>
     where
         <P::State as UserState>::Float: num_traits::FromPrimitive,
     {
         let policies = if self.policies.is_empty() {
-            PolicyStack::default(
+            PolicyStack::standard(
                 1000,
                 <<P::State as UserState>::Float as num_traits::FromPrimitive>::from_f64(1e-7)
                     .unwrap(),
@@ -134,14 +149,18 @@ where
     }
 
     /// Finalise with custom policy
-    pub fn finalise_with(self, policy: PolicyStack<<P::State as UserState>::Float>) -> Engine<P> {
-        let cancellation = self
-            .cancellation_token
-            .unwrap_or_default();
+    pub fn finalise_with(
+        self,
+        policy: PolicyStack<<P::State as UserState>::Float>,
+    ) -> Engine<P, PolicyStack<<P::State as UserState>::Float>, C> {
+        let cancellation = self.cancellation_token.unwrap_or_default();
 
         #[cfg(feature = "ctrlc")]
         {
-            let _ = crate::controller::attach_ctrlc(cancellation.clone());
+            ctrlc::set_handler(move || {
+                token.cancel();
+            })
+            .unwrap();
         }
 
         Engine {
@@ -156,7 +175,21 @@ where
 
             policy: self.policies.merge(policy),
 
-            observers: Observers::from_parts(self.progress_observers, self.state_observers),
+            observers: self.observers,
+            checkpoint_store: self.checkpoint_store,
         }
+    }
+
+    pub fn resume_from_checkpoint(mut self) -> Result<Self, CheckpointError>
+    where
+        C: CheckpointStore<P::State>,
+    {
+        if let Some(store) = &self.checkpoint_store {
+            if let Some(checkpoint) = store.load()? {
+                self.state = checkpoint.into_state();
+            }
+        }
+
+        Ok(self)
     }
 }

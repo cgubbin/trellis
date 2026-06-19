@@ -1,10 +1,13 @@
 mod convergence;
 mod runtime;
+mod view;
 
 use crate::progress::ProgressReport;
 use crate::TrellisFloat;
 use convergence::ConvergenceState;
 use runtime::RuntimeState;
+
+pub(crate) use view::StateView;
 
 use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
@@ -25,12 +28,15 @@ use serde::{Deserialize, Serialize};
 pub trait UserState: Clone + Default {
     type Float: TrellisFloat;
     type Param;
+    type Snapshot: Clone;
 
     // Returns the current parameter value, if one is assigned
     fn get_param(&self) -> Option<&Self::Param>;
 
     /// Reports progress AFTER update
     fn progress(&self) -> ProgressReport<Self::Float>;
+
+    fn snapshot(&self) -> Self::Snapshot;
 }
 
 /// The state of the [`trellis`] solver

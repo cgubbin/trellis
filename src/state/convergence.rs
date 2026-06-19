@@ -64,6 +64,10 @@ impl<F: FloatCore> ConvergenceState<F> {
         self.best
     }
 
+    pub fn current_metric(&self) -> F {
+        self.current_metric
+    }
+
     pub fn previous(&self) -> F {
         self.previous
     }

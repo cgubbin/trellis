@@ -1,41 +1,35 @@
-use csv::Reader;
+use csv::{Reader, Writer};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::{Arc, Mutex};
 
-use super::ProgressObserver;
-use crate::engine::EngineStage;
-use crate::progress::ProgressRow;
+use super::Observe;
+use crate::engine::EngineEvent;
+use crate::progress::Progress;
+use crate::state::{StateView, UserState};
 
-#[derive(Debug, Clone)]
-pub(super) struct Row {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub(super) struct Row<F> {
     pub(super) iteration: usize,
-    pub(super) absolute: Option<f64>,
-    pub(super) relative: Option<f64>,
-    pub(super) value: Option<f64>,
+    pub(super) absolute: Option<F>,
+    pub(super) relative: Option<F>,
+    pub(super) value: Option<F>,
     pub(super) tag: String,
 }
 
-pub(super) fn load_csv(path: impl AsRef<std::path::Path>) -> Result<Vec<Row>, Box<dyn Error>> {
+pub(super) fn load_csv<F: DeserializeOwned>(
+    path: impl AsRef<std::path::Path>,
+) -> Result<Vec<Row<F>>, Box<dyn Error>> {
     let mut rdr = Reader::from_path(path)?;
 
     let mut rows = Vec::new();
 
-    for result in rdr.records() {
-        let r = result?;
-
-        let row = Row {
-            iteration: r.get(0).unwrap().parse()?,
-            absolute: parse_opt(r.get(1)),
-            relative: parse_opt(r.get(2)),
-            value: parse_opt(r.get(3)),
-            tag: r.get(4).unwrap_or("").to_string(),
-        };
-
-        rows.push(row);
+    for result in rdr.deserialize() {
+        let record: Row<F> = result?;
+        rows.push(record);
     }
-
     Ok(rows)
 }
 
@@ -46,41 +40,57 @@ fn parse_opt(s: Option<&str>) -> Option<f64> {
     }
 }
 
-pub struct CsvProgressWriter<F, W: Write> {
-    writer: Arc<Mutex<BufWriter<W>>>,
-    _phantom: std::marker::PhantomData<F>,
+pub struct CsvProgressWriter<S, W: Write> {
+    writer: Arc<Mutex<Writer<W>>>,
+    _phantom: std::marker::PhantomData<S>,
 }
 
-impl<F: std::fmt::Display + Send + Sync + 'static> CsvProgressWriter<F, File> {
+impl<S: std::fmt::Display + Send + Sync + 'static> CsvProgressWriter<S, BufWriter<File>> {
     pub fn new(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
         let file = File::create(path)?;
-        let mut writer = BufWriter::new(file);
+        let writer = BufWriter::new(file);
 
-        writeln!(writer, "iteration,current,best,since_best,termination")?;
+        let csv_writer = csv::WriterBuilder::new()
+            .has_headers(true)
+            .from_writer(writer);
 
         Ok(Self {
-            writer: Arc::new(Mutex::new(writer)),
+            writer: Arc::new(Mutex::new(csv_writer)),
             _phantom: Default::default(),
         })
     }
 }
 
-impl<F, W> ProgressObserver<F> for CsvProgressWriter<F, W>
+impl<S, W> Observe<S> for CsvProgressWriter<S, W>
 where
-    F: std::fmt::Display + Send + Sync + 'static,
+    S: UserState + Send + Sync,
     W: Write + Send,
 {
-    fn observe(&self, row: ProgressRow<F>) {
-        let mut w = self.writer.lock().unwrap();
+    fn observe(&self, name: &'static str, state: StateView<'_, S>, event: &EngineEvent<S::Float>) {
+        if let EngineEvent::Progress(progress) = event {
+            let iteration = state.iteration();
+            let row = match progress {
+                Progress::Metric { value } => Row {
+                    iteration,
+                    absolute: None,
+                    relative: None,
+                    value: Some(value),
+                    tag: event.as_tag().to_string(),
+                },
+                Progress::ErrorEstimate { absolute, relative } => Row {
+                    iteration,
+                    absolute: Some(absolute),
+                    relative: Some(relative),
+                    value: None,
+                    tag: event.as_tag().to_string(),
+                },
+                _ => return,
+            };
+            let mut w = self.writer.lock().unwrap();
 
-        let _ = writeln!(
-            w,
-            "{},{},{},{},{:?}",
-            row.iteration, row.current, row.best, row.since_best, row.termination
-        );
-    }
-
-    fn should_observe(&self, stage: EngineStage) -> bool {
-        stage == EngineStage::Iteration
+            if w.serialize(row).is_err() {
+                eprintln!("failed to serialize csv file row");
+            }
+        }
     }
 }
