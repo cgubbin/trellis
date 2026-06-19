@@ -22,7 +22,11 @@ pub use watchers::Frequency;
 pub use web_time::Duration;
 
 pub trait TrellisFloat:
-    std::fmt::Display + std::fmt::Debug + serde::Serialize + num_traits::float::FloatCore
+    std::fmt::Display
+    + std::fmt::Debug
+    + serde::Serialize
+    + serde::de::DeserializeOwned
+    + num_traits::float::FloatCore
 {
 }
 

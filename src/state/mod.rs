@@ -7,6 +7,7 @@ use convergence::ConvergenceState;
 use runtime::RuntimeState;
 
 use num_traits::float::FloatCore;
+use serde::{Deserialize, Serialize};
 
 /// The user-defined state must implement this trait to be used as part of the trellis calculation
 /// loop
@@ -36,7 +37,7 @@ pub trait UserState: Clone + Default {
 ///
 /// This contains generic fields common to all solvers, as well as a user-defined state
 /// `S` which contains application specific fields.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct State<S: UserState> {
     /// The user component of the state implements the application specific code
     pub(crate) user: S,

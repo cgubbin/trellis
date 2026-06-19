@@ -1,5 +1,7 @@
+#[derive(Copy, Clone, PartialEq)]
 pub(crate) enum EngineStage {
     Initialisation,
-    WrapUp,
     Iteration,
+    Checkpoint,
+    WrapUp,
 }

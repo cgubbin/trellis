@@ -26,6 +26,15 @@ impl Tracer {
         }
     }
 
+    fn checkpoint(&self, ident: &str) {
+        match self.level {
+            Level::INFO => info!("checkpointing: {}", ident),
+            Level::DEBUG => debug!("checkpointing: {}", ident),
+            Level::TRACE => trace!("checkpointing: {}", ident),
+            _ => unreachable!(),
+        }
+    }
+
     fn wrap_up(&self, ident: &str) {
         match self.level {
             Level::INFO => info!("wrap up: {}", ident),
@@ -72,8 +81,9 @@ where
     fn observe(&self, ident: &'static str, state: &State<S>, ctx: &ObservationContext) {
         let res = match ctx.stage {
             EngineStage::Initialisation => self.initialisation(ident),
-            EngineStage::WrapUp => self.wrap_up(ident),
             EngineStage::Iteration => self.iteration(state),
+            EngineStage::Checkpoint => self.checkpoint(ident),
+            EngineStage::WrapUp => self.wrap_up(ident),
         };
 
         // if let Err(e) = res {

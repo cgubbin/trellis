@@ -1,7 +1,9 @@
 use crate::Termination;
-use web_time::Duration;
 
-#[derive(Clone, Debug)]
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RuntimeState {
     iter: usize,
     max_iter: usize,

@@ -2,9 +2,12 @@ use num_traits::float::FloatCore;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
-use crate::policy::{DefaultPolicy, EnginePolicy};
+use crate::engine::policy::{EnginePolicy, PolicyStack};
 use crate::{
-    watchers::{Frequency, ObserverVec, ProgressObserver, StateObserver},
+    engine::Engine,
+    watchers::{
+        Frequency, Observers, ProgressObserver, ProgressObservers, StateObserver, StateObservers,
+    },
     Procedure, State, UserState,
 };
 
@@ -19,7 +22,7 @@ impl<P> GenerateBuilder for P
 where
     P: Procedure,
     P::State: UserState,
-    P::State::Float: FloatCore,
+    <P::State as UserState>::Float: FloatCore,
 {
     fn build_for(self, problem: Self::Problem) -> Builder<Self> {
         Builder {
@@ -29,8 +32,10 @@ where
             time: true,
             cancellation_token: None,
 
-            state_observers: ObserverVec::default(),
-            progress_observers: Vec::new(),
+            state_observers: StateObservers::new(),
+            progress_observers: ProgressObservers::new(),
+
+            policies: PolicyStack::new(),
         }
     }
 }
@@ -46,14 +51,17 @@ where
     time: bool,
     cancellation_token: Option<CancellationToken>,
 
-    state_observers: ObserverVec<State<P::State>>,
-    progress_observers: Vec<Arc<dyn ProgressObserver<P::State::Float>>>,
+    state_observers: StateObservers<P::State>,
+    progress_observers: ProgressObservers<<P::State as UserState>::Float>,
+
+    policies: PolicyStack<<P::State as UserState>::Float>,
 }
 
 impl<P> Builder<P>
 where
     P: Procedure,
     P::State: UserState,
+    <P::State as UserState>::Float: FloatCore + 'static,
 {
     #[must_use]
     pub fn time(mut self, time: bool) -> Self {
@@ -75,7 +83,7 @@ where
     #[must_use]
     pub fn attach_state_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
     where
-        OBS: StateObserver<State<P::State>> + 'static,
+        OBS: StateObserver<P::State> + 'static,
     {
         self.state_observers
             .attach(Arc::new(Mutex::new(observer)), frequency);
@@ -84,11 +92,21 @@ where
 
     /// Attach a progress observer (lightweight per-iteration stream)
     #[must_use]
-    pub fn attach_progress_observer<OBS>(mut self, observer: OBS) -> Self
+    pub fn attach_progress_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
     where
-        OBS: ProgressObserver<P::State::Float> + 'static,
+        OBS: ProgressObserver<<P::State as UserState>::Float> + 'static,
     {
-        self.progress_observers.push(Arc::new(observer));
+        self.progress_observers
+            .attach(Arc::new(Mutex::new(observer)), frequency);
+        self
+    }
+
+    #[must_use]
+    pub fn and_policy<Q>(mut self, policy: Q) -> Self
+    where
+        Q: EnginePolicy<<P::State as UserState>::Float> + 'static,
+    {
+        self.policies = self.policies.add(policy);
         self
     }
 
@@ -99,18 +117,24 @@ where
     }
 
     /// Finalise with default policy
-    pub fn finalise(self) -> Engine<P, DefaultPolicy<P::State::Float>>
+    pub fn finalise(self) -> Engine<P>
     where
-        DefaultPolicy<P::State::Float>: EnginePolicy<P::State::Float>,
+        <P::State as UserState>::Float: num_traits::FromPrimitive,
     {
-        self.finalise_with(DefaultPolicy::default())
+        let policies = if self.policies.is_empty() {
+            PolicyStack::default(
+                1000,
+                <<P::State as UserState>::Float as num_traits::FromPrimitive>::from_f64(1e-7)
+                    .unwrap(),
+            )
+        } else {
+            PolicyStack::new()
+        };
+        self.finalise_with(policies)
     }
 
     /// Finalise with custom policy
-    pub fn finalise_with<Q>(self, policy: Q) -> Engine<P, Q>
-    where
-        Q: EnginePolicy<P::State::Float>,
-    {
+    pub fn finalise_with(self, policy: PolicyStack<<P::State as UserState>::Float>) -> Engine<P> {
         let cancellation = self
             .cancellation_token
             .unwrap_or_else(CancellationToken::new);
@@ -130,10 +154,9 @@ where
 
             cancellation,
 
-            policy,
+            policy: self.policies.merge(policy),
 
-            state_observers: self.state_observers,
-            progress_observers: self.progress_observers,
+            observers: Observers::from_parts(self.progress_observers, self.state_observers),
         }
     }
 }

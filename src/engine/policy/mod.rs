@@ -5,6 +5,7 @@ use num_traits::float::FloatCore;
 use std::time::Duration;
 
 mod cancellation;
+mod checkpoint;
 mod complete;
 mod max_iter;
 mod no_progress;
@@ -14,6 +15,7 @@ mod timeout;
 mod tolerance;
 
 pub use cancellation::CancellationPolicy;
+pub use checkpoint::CheckpointPolicy;
 pub use max_iter::MaxIterationPolicy;
 pub use no_progress::NoProgressPolicy;
 pub use stagnation::StagnationPolicy;
@@ -44,6 +46,10 @@ impl<F> PolicyStack<F> {
         Self { policies: vec![] }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.policies.is_empty()
+    }
+
     pub fn add<P>(mut self, p: P) -> Self
     where
         P: EnginePolicy<F> + 'static,
@@ -51,26 +57,39 @@ impl<F> PolicyStack<F> {
         self.policies.push(Box::new(p));
         self
     }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        for each in other.policies.into_iter() {
+            self.policies.push(each);
+        }
+        self
+    }
 }
 
 impl<F> PolicyStack<F> {
     pub fn decide(&mut self, batch: &EventBatch<F>, ctx: &EngineContext) -> EngineAction {
+        let mut checkpoint = false;
         for p in &mut self.policies {
             match p.decide(batch, ctx) {
                 EngineAction::Stop(t) => return EngineAction::Stop(t),
                 EngineAction::Continue => {}
                 EngineAction::Step => {}
+                EngineAction::EmitCheckpoint => {
+                    checkpoint = true;
+                }
             }
+        }
+
+        if checkpoint {
+            return EngineAction::EmitCheckpoint;
         }
 
         EngineAction::Step
     }
 }
 
-pub struct Policies;
-
-impl Policies {
-    pub fn default<F>(max_iter: usize, atol: F) -> PolicyStack<F>
+impl<F> PolicyStack<F> {
+    pub fn default(max_iter: usize, atol: F) -> PolicyStack<F>
     where
         F: FloatCore + 'static,
     {
@@ -80,7 +99,7 @@ impl Policies {
             .add(AbsoluteTolerancePolicy::new(atol))
     }
 
-    pub fn optimisation<F>(max_iter: usize, atol: F, stagnation: usize) -> PolicyStack<F>
+    pub fn optimisation(max_iter: usize, atol: F, stagnation: usize) -> PolicyStack<F>
     where
         F: FloatCore + 'static,
     {
@@ -91,7 +110,7 @@ impl Policies {
             .add(StagnationPolicy::new(stagnation))
     }
 
-    pub fn global_optimisation<F>(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
+    pub fn global_optimisation(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
     where
         F: FloatCore + 'static,
     {
@@ -103,7 +122,7 @@ impl Policies {
             .add(NoProgressPolicy::new(F::epsilon(), 50))
     }
 
-    pub fn monte_carlo<F>(max_iter: usize) -> PolicyStack<F>
+    pub fn monte_carlo(max_iter: usize) -> PolicyStack<F>
     where
         F: 'static,
     {
@@ -112,7 +131,7 @@ impl Policies {
             .add(MaxIterationPolicy::new(max_iter))
     }
 
-    pub fn timed<F>(timeout: Duration) -> PolicyStack<F>
+    pub fn timed(timeout: Duration) -> PolicyStack<F>
     where
         F: 'static,
     {

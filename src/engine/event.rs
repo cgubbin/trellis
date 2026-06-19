@@ -12,5 +12,7 @@ pub enum EngineAction {
 
     Step,
 
+    EmitCheckpoint,
+
     Stop(Termination),
 }

@@ -3,11 +3,12 @@ use crate::progress::ProgressRow;
 use crate::state::{State, UserState};
 use crate::Termination;
 
+mod checkpoint;
 mod csv_file;
 mod plot;
 mod tracing;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct ObservationContext {
     pub iteration: usize,
@@ -17,18 +18,44 @@ pub struct ObservationContext {
 
 pub trait ProgressObserver<F>: Send + Sync {
     fn observe(&self, progress: ProgressRow<F>);
+    fn should_observe(&self, stage: EngineStage) -> bool {
+        true
+    }
 }
 
 pub struct ProgressObservers<F> {
-    inner: Vec<(Arc<dyn ProgressObserver<F>>, Frequency)>,
+    inner: Vec<(Arc<Mutex<dyn ProgressObserver<F>>>, Frequency)>,
+}
+
+impl<F> ProgressObservers<F> {
+    pub fn new() -> Self {
+        Self { inner: vec![] }
+    }
+
+    pub fn attach(&mut self, observer: Arc<Mutex<dyn ProgressObserver<F>>>, frequency: Frequency) {
+        self.inner.push((observer, frequency))
+    }
 }
 
 pub trait StateObserver<S: UserState>: Send + Sync {
     fn observe(&self, ident: &'static str, state: &State<S>, ctx: &ObservationContext);
+    fn should_observe(&self, stage: EngineStage) -> bool {
+        true
+    }
 }
 
 pub struct StateObservers<S: UserState> {
-    inner: Vec<(Arc<dyn StateObserver<S>>, Frequency)>,
+    inner: Vec<(Arc<Mutex<dyn StateObserver<S>>>, Frequency)>,
+}
+
+impl<S: UserState> StateObservers<S> {
+    pub fn new() -> Self {
+        Self { inner: vec![] }
+    }
+
+    pub fn attach(&mut self, observer: Arc<Mutex<dyn StateObserver<S>>>, frequency: Frequency) {
+        self.inner.push((observer, frequency))
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -58,6 +85,12 @@ where
     state: StateObservers<S>,
 }
 
+impl<S: UserState> Observers<S> {
+    pub fn from_parts(progress: ProgressObservers<S::Float>, state: StateObservers<S>) -> Self {
+        Self { progress, state }
+    }
+}
+
 impl<S> Observers<S>
 where
     S: UserState,
@@ -71,7 +104,11 @@ where
     ) {
         for (obs, freq) in &self.progress.inner {
             if freq.should_emit(ctx.iteration, is_exit) {
-                obs.observe(progress.clone());
+                // TODO: Unwrap should be handled correctly
+                let obs = obs.lock().unwrap();
+                if obs.should_observe(ctx.stage) {
+                    obs.observe(progress.clone());
+                }
             }
         }
     }
@@ -84,8 +121,16 @@ where
         is_exit: bool,
     ) {
         for (obs, freq) in &self.state.inner {
-            if freq.should_emit(ctx.iteration, is_exit) {
-                obs.observe(ident, state, ctx);
+            // Emit if the frequency of the observer is valid
+            //
+            // Checkpoints should always emit when called as their emission is policy led, so the
+            // check is overridden at a checkpoint.
+            if freq.should_emit(ctx.iteration, is_exit) | (ctx.stage == EngineStage::Checkpoint) {
+                // TODO: Unwrap should be handled correctly
+                let obs = obs.lock().unwrap();
+                if obs.should_observe(ctx.stage) {
+                    obs.observe(ident, state, ctx);
+                }
             }
         }
     }

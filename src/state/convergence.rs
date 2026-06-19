@@ -1,7 +1,9 @@
 use crate::progress::Progress;
-use num_traits::float::FloatCore;
 
-#[derive(Clone, Debug)]
+use num_traits::float::FloatCore;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConvergenceState<F> {
     current: F,
     previous: F,
