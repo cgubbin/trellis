@@ -137,7 +137,7 @@ where
     pub fn finalise_with(self, policy: PolicyStack<<P::State as UserState>::Float>) -> Engine<P> {
         let cancellation = self
             .cancellation_token
-            .unwrap_or_else(CancellationToken::new);
+            .unwrap_or_default();
 
         #[cfg(feature = "ctrlc")]
         {

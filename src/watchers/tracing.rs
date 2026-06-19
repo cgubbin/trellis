@@ -79,7 +79,7 @@ where
     S::Float: FloatCore + Value,
 {
     fn observe(&self, ident: &'static str, state: &State<S>, ctx: &ObservationContext) {
-        let res = match ctx.stage {
+        match ctx.stage {
             EngineStage::Initialisation => self.initialisation(ident),
             EngineStage::Iteration => self.iteration(state),
             EngineStage::Checkpoint => self.checkpoint(ident),

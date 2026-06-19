@@ -39,6 +39,12 @@ pub struct PolicyStack<F> {
     policies: Vec<Box<dyn EnginePolicy<F>>>,
 }
 
+impl<F> Default for PolicyStack<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F> PolicyStack<F> {
     pub fn new() -> Self {
         Self { policies: vec![] }

@@ -123,7 +123,7 @@ where
             .initialise(&mut self.problem, &mut state.user)?;
 
         self.observe(
-            &state,
+            state,
             state.runtime.iteration(),
             None,
             EngineStage::Initialisation,
@@ -220,7 +220,7 @@ where
         };
         self.observers
             .observe_progress(P::NAME, ProgressRow::from(state), &ctx, is_exit);
-        self.observers.observe_state(P::NAME, &state, &ctx, is_exit);
+        self.observers.observe_state(P::NAME, state, &ctx, is_exit);
     }
 }
 

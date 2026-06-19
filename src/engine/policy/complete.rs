@@ -10,11 +10,8 @@ pub struct CompletionPolicy;
 impl<F> EnginePolicy<F> for CompletionPolicy {
     fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
         for each in &batch.events {
-            match each {
-                Progress::Complete => {
-                    return EngineAction::Stop(crate::Termination::Converged);
-                }
-                _ => {}
+            if let Progress::Complete = each {
+                return EngineAction::Stop(crate::Termination::Converged);
             }
         }
 

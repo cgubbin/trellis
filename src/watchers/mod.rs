@@ -70,7 +70,7 @@ impl Frequency {
     pub fn should_emit(&self, iteration: usize, is_exit: bool) -> bool {
         match self {
             Frequency::Always => true,
-            Frequency::Every(n) => iteration % n == 0,
+            Frequency::Every(n) => iteration.is_multiple_of(*n),
             Frequency::OnExit => is_exit,
             Frequency::Never => false,
         }
