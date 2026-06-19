@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::fs::File;
 
 use super::{ObservationContext, StateObserver};

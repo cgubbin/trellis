@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::engine::EngineStage;
 use crate::watchers::{ObservationContext, StateObserver};

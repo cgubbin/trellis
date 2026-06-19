@@ -20,12 +20,12 @@ pub use result::{EngineFailure, EngineOutput, EngineResult};
 pub use termination::Termination;
 
 use num_traits::float::FloatCore;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::{
-    watchers::{ObservationContext, Observers},
+    watchers::Observers,
     Output, UserState,
 };
 use crate::{Problem, Procedure, State};

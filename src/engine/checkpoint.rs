@@ -3,8 +3,7 @@ use crate::{
     TrellisFloat,
 };
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint<S>

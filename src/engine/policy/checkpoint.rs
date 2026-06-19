@@ -1,9 +1,6 @@
 use super::EnginePolicy;
 
-use crate::{
-    engine::{EngineAction, EngineContext, EventBatch},
-    progress::ProgressReport,
-};
+use crate::engine::{EngineAction, EngineContext, EventBatch};
 
 pub struct CheckpointPolicy {
     every: usize,

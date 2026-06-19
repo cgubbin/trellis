@@ -5,7 +5,6 @@ use num_traits::float::FloatCore;
 use crate::{
     engine::{EngineAction, EngineContext, EventBatch},
     progress::Progress,
-    state::{State, UserState},
     Termination,
 };
 

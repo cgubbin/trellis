@@ -1,5 +1,4 @@
 use super::EngineContext;
-use crate::progress::ProgressReport;
 
 use num_traits::float::FloatCore;
 use std::time::Duration;
@@ -15,7 +14,6 @@ mod timeout;
 mod tolerance;
 
 pub use cancellation::CancellationPolicy;
-pub use checkpoint::CheckpointPolicy;
 pub use max_iter::MaxIterationPolicy;
 pub use no_progress::NoProgressPolicy;
 pub use stagnation::StagnationPolicy;

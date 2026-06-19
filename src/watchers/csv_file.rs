@@ -1,6 +1,6 @@
 use csv::Reader;
 use std::error::Error;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::sync::{Arc, Mutex};
 
