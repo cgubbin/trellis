@@ -101,8 +101,6 @@ pub use progress::Progress;
 
 pub use watchers::{CsvProgressWriter, Frequency, Observe, PlotObserver, Tracer};
 
-pub use web_time::Duration;
-
 pub trait TrellisFloat:
     std::fmt::Display
     + std::fmt::Debug
