@@ -42,6 +42,7 @@ impl<F> RunSummary<F> {
 /// Result of a completed calculation.
 ///
 /// Returned by [`Engine::run`].
+#[derive(Debug)]
 pub struct EngineOutput<R, S>
 where
     S: UserState,
@@ -59,6 +60,7 @@ where
 /// Result of a completed calculation including a restart snapshot.
 ///
 /// Returned by [`Engine::run_with_snapshot`].
+#[derive(Debug)]
 pub struct EngineOutputWithSnapshot<R, S>
 where
     S: UserState + Snapshotable,

@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 #[derive(Debug)]
 pub struct Problem<P> {
-    inner: P,
+    pub inner: P,
 }
 
 impl<P> Problem<P> {

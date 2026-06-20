@@ -146,7 +146,7 @@ impl<F> PolicyStack<F> {
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
             .add(AbsoluteTolerancePolicy::new(atol))
-            .add(StagnationPolicy::new(stagnation))
+        // .add(StagnationPolicy::new(stagnation))
     }
 
     pub fn global_optimisation(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
@@ -157,7 +157,7 @@ impl<F> PolicyStack<F> {
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
             .add(TargetValuePolicy::new(target))
-            .add(StagnationPolicy::new(stagnation))
+            // .add(StagnationPolicy::new(stagnation))
             .add(NoProgressPolicy::new(F::epsilon(), 50))
     }
 

@@ -69,6 +69,12 @@ mod policy;
 mod result;
 mod termination;
 
+pub use policy::{
+    AbsoluteTolerancePolicy, CancellationPolicy, CheckpointPolicy, CompletionPolicy,
+    MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy,
+    TargetValuePolicy, TimeoutPolicy,
+};
+
 use crate::progress::Progress;
 pub use builder::GenerateBuilder;
 pub use cancellation::CancellationGuard;
@@ -77,6 +83,7 @@ use context::EngineContext;
 pub(crate) use event::{EngineAction, EngineSignal, EventBatch};
 use extensions::{EngineSink, Extensions};
 use policy::{EnginePolicy, PolicyStack};
+
 use result::InternalEngineResult;
 pub use result::{EngineFailure, EngineResult, EngineResultWithSnapshot};
 pub use termination::Termination;

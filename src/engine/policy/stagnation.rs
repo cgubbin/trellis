@@ -33,19 +33,25 @@ use crate::{
 
 pub struct StagnationPolicy<F> {
     window: usize,
+    relative_slope_tol: F,
+    relative_noise_floor: F,
     history: Vec<F>,
 }
 
-impl<F> StagnationPolicy<F> {
+impl<F: num_traits::FromPrimitive> StagnationPolicy<F> {
     pub fn new(window: usize) -> Self {
         Self {
             window,
             history: Vec::new(),
+            relative_slope_tol: F::from_f64(1e-4).unwrap(),
+            relative_noise_floor: F::from_f64(1e-6).unwrap(),
         }
     }
 }
 
-impl<F: FloatCore> EnginePolicy<F> for StagnationPolicy<F> {
+impl<F: FloatCore + num_traits::FromPrimitive + std::iter::Sum<F> + ::std::fmt::Debug>
+    EnginePolicy<F> for StagnationPolicy<F>
+{
     fn decide(&mut self, batch: &EventBatch<F>, _ctx: &EngineContext) -> EngineAction {
         for e in &batch.events {
             let v = match e {
@@ -65,12 +71,41 @@ impl<F: FloatCore> EnginePolicy<F> for StagnationPolicy<F> {
         }
 
         // slope-based stagnation
-        let first = self.history.first().unwrap();
-        let last = self.history.last().unwrap();
+        let scale = self.history[0].abs().max(F::one());
+        let slope_tol = self.relative_slope_tol * scale;
+        let noise_floor = self.relative_noise_floor * scale * scale;
 
-        let improvement = (*first - *last).abs();
+        let n = F::from(self.history.len()).unwrap();
 
-        if improvement < F::epsilon() {
+        let mut sum_x = F::zero();
+        let mut sum_y = F::zero();
+        let mut sum_xy = F::zero();
+        let mut sum_x2 = F::zero();
+
+        for (i, y) in self.history.iter().enumerate() {
+            let x = F::from(i).unwrap();
+
+            sum_x = sum_x + x;
+            sum_y = sum_y + *y;
+            sum_xy = sum_xy + x * *y;
+            sum_x2 = sum_x2 + x * x;
+        }
+
+        let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
+
+        let mean = sum_y / n;
+
+        let variance: F = self
+            .history
+            .iter()
+            .map(|y| {
+                let d = *y - mean;
+                d * d
+            })
+            .sum::<F>()
+            / n;
+
+        if slope.abs() < slope_tol && variance < noise_floor {
             return EngineAction::Stop(Termination::Stagnated);
         }
 

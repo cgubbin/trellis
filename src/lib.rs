@@ -91,13 +91,19 @@ pub use procedure::Procedure;
 
 pub use engine::{CancellationGuard, GenerateBuilder, Termination};
 
+pub use engine::{
+    AbsoluteTolerancePolicy, CancellationPolicy, CheckpointPolicy, CompletionPolicy,
+    MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy,
+    TargetValuePolicy, TimeoutPolicy,
+};
+
 pub use problem::Problem;
 
 pub use result::{EngineOutput, EngineOutputWithSnapshot, TrellisError};
 
 pub use state::{Snapshotable, StateRestorer, UserState};
 
-pub use progress::Progress;
+pub use progress::{Progress, ProgressDiagnostics};
 
 pub use watchers::{CsvProgressWriter, Frequency, Observe, PlotObserver, Tracer};
 
