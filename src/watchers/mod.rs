@@ -13,10 +13,7 @@ mod sampler;
 mod tracing;
 
 pub use csv_file::CsvProgressWriter;
-pub use failure::{FailureDiagnostics, FailureReport};
-pub use metrics::{MetricsObserver, RunSummary};
 pub use plot::PlotObserver;
-pub use sampler::Sampler;
 pub use tracing::Tracer;
 
 /// Core observer trait for the engine event system.

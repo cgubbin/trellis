@@ -75,18 +75,18 @@ pub use policy::{
     TargetValuePolicy, TimeoutPolicy,
 };
 
-use crate::progress::Progress;
 pub use builder::GenerateBuilder;
 pub use cancellation::CancellationGuard;
-pub use checkpoint::{Checkpoint, CheckpointBackend, CheckpointView};
 use context::EngineContext;
 pub(crate) use event::{EngineAction, EngineSignal, EventBatch};
-use extensions::{EngineSink, Extensions};
-use policy::{EnginePolicy, PolicyStack};
+use extensions::Extensions;
+use policy::EnginePolicy;
 
 use result::InternalEngineResult;
 pub use result::{EngineFailure, EngineResult, EngineResultWithSnapshot};
 pub use termination::Termination;
+
+pub use checkpoint::{InMemoryCheckpointStore, JsonCheckpointStore};
 
 use num_traits::float::FloatCore;
 use std::time::Instant;
@@ -148,7 +148,7 @@ where
     <P::State as UserState>::Float: FloatCore,
     Q: EnginePolicy<<P::State as UserState>::Float>,
 {
-    pub fn run_with_snapshot(mut self) -> EngineResultWithSnapshot<P::Output, P::State, P::Error>
+    pub fn run_with_snapshot(self) -> EngineResultWithSnapshot<P::Output, P::State, P::Error>
     where
         P::State: Snapshotable,
     {
@@ -157,7 +157,7 @@ where
         result.map(|(output, state)| output.with_snapshot(state.user.snapshot()))
     }
 
-    pub fn run(mut self) -> EngineResult<P::Output, P::State, P::Error> {
+    pub fn run(self) -> EngineResult<P::Output, P::State, P::Error> {
         self._run().map(|internal| internal.0)
     }
 

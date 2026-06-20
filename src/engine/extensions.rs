@@ -1,7 +1,6 @@
 use crate::{
     engine::EngineSignal,
-    procedure::Procedure,
-    state::{State, StateView, UserState},
+    state::{StateView, UserState},
 };
 
 pub struct Extensions<S>(Vec<Box<dyn EngineSink<S>>>);

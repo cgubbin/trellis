@@ -1,4 +1,4 @@
-use super::{ConvergenceState, RuntimeState, Snapshotable, State, UserState};
+use super::{ConvergenceState, RuntimeState, State, UserState};
 
 use num_traits::float::FloatCore;
 use std::time::Duration;

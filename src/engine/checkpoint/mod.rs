@@ -3,7 +3,6 @@ use crate::{
     state::{
         ConvergenceState, RuntimeState, Snapshotable, State, StateRestorer, StateView, UserState,
     },
-    Procedure, TrellisFloat,
 };
 
 use serde::{Deserialize, Serialize};

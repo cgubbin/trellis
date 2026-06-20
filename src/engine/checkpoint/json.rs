@@ -6,10 +6,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{
-    engine::checkpoint::{Checkpoint, CheckpointBackend, CheckpointError, CheckpointView},
-    state::Snapshotable,
-};
+use crate::engine::checkpoint::{Checkpoint, CheckpointBackend, CheckpointError, CheckpointView};
 
 pub struct JsonCheckpointStore {
     path: PathBuf,

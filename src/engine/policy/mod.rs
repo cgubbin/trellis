@@ -140,24 +140,24 @@ impl<F> PolicyStack<F> {
 
     pub fn optimisation(max_iter: usize, atol: F, stagnation: usize) -> PolicyStack<F>
     where
-        F: FloatCore + 'static,
+        F: FloatCore + 'static + num_traits::FromPrimitive + std::iter::Sum<F>,
     {
         PolicyStack::new()
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
             .add(AbsoluteTolerancePolicy::new(atol))
-        // .add(StagnationPolicy::new(stagnation))
+            .add(StagnationPolicy::new(stagnation))
     }
 
     pub fn global_optimisation(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
     where
-        F: FloatCore + 'static,
+        F: FloatCore + 'static + num_traits::FromPrimitive + std::iter::Sum<F>,
     {
         PolicyStack::new()
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
             .add(TargetValuePolicy::new(target))
-            // .add(StagnationPolicy::new(stagnation))
+            .add(StagnationPolicy::new(stagnation))
             .add(NoProgressPolicy::new(F::epsilon(), 50))
     }
 

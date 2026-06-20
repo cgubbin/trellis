@@ -30,7 +30,7 @@ pub trait Procedure {
     fn initialise_user_state(
         &self,
         _problem: &Problem<Self::Problem>,
-        state: &mut Self::State,
+        _state: &mut Self::State,
     ) -> Result<(), Self::Error> {
         Ok(())
     }

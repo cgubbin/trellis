@@ -35,7 +35,6 @@ mod view;
 
 pub use user::{Snapshotable, StateRestorer, UserState};
 
-use crate::TrellisFloat;
 pub(crate) use convergence::ConvergenceState;
 pub(crate) use runtime::RuntimeState;
 

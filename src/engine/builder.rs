@@ -90,8 +90,8 @@ use tokio_util::sync::CancellationToken;
 use crate::engine::policy::{EnginePolicy, PolicyStack};
 use crate::{
     engine::{
-        checkpoint::{CheckpointBackend, CheckpointError, CheckpointExtension, EngineInitializer},
-        extensions::{EngineSink, Extensions},
+        checkpoint::{CheckpointBackend, CheckpointExtension},
+        extensions::Extensions,
         Engine,
     },
     state::{Snapshotable, State, StateRestorer},
@@ -231,7 +231,7 @@ where
 {
     // TODO: Possibly unneeded if a valid state is always constructed in the initialise method
     #[must_use]
-    pub fn with_initial_state(mut self, user: P::State) -> Builder<P, Initialised> {
+    pub fn with_initial_state(self, user: P::State) -> Builder<P, Initialised> {
         Builder {
             procedure: self.procedure,
             problem: self.problem,
@@ -251,7 +251,7 @@ where
 
     #[must_use]
     pub fn resume_from_checkpoint(
-        mut self,
+        self,
         snapshot: <P::State as Snapshotable>::Snapshot,
     ) -> Builder<P, Initialised>
     where

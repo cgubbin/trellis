@@ -49,8 +49,8 @@ impl<F: num_traits::FromPrimitive> StagnationPolicy<F> {
     }
 }
 
-impl<F: FloatCore + num_traits::FromPrimitive + std::iter::Sum<F> + ::std::fmt::Debug>
-    EnginePolicy<F> for StagnationPolicy<F>
+impl<F: FloatCore + num_traits::FromPrimitive + std::iter::Sum<F>> EnginePolicy<F>
+    for StagnationPolicy<F>
 {
     fn decide(&mut self, batch: &EventBatch<F>, _ctx: &EngineContext) -> EngineAction {
         for e in &batch.events {

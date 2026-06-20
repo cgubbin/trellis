@@ -89,7 +89,9 @@ mod state;
 
 pub use procedure::Procedure;
 
-pub use engine::{CancellationGuard, GenerateBuilder, Termination};
+pub use engine::{
+    CancellationGuard, GenerateBuilder, InMemoryCheckpointStore, JsonCheckpointStore, Termination,
+};
 
 pub use engine::{
     AbsoluteTolerancePolicy, CancellationPolicy, CheckpointPolicy, CompletionPolicy,

@@ -1,6 +1,6 @@
-use crate::result::{EngineOutput, EngineOutputWithSnapshot, RunSummary};
-use crate::state::{Snapshotable, State, StateView, UserState};
-use crate::{Termination, TrellisFloat};
+use crate::result::{EngineOutput, EngineOutputWithSnapshot};
+use crate::state::{State, UserState};
+use crate::TrellisFloat;
 
 /// Unified result type returned by the engine.
 ///
@@ -16,7 +16,7 @@ pub type EngineResult<O, S, E> = Result<EngineOutput<O, S>, EngineFailure<E, S>>
 pub(super) type InternalEngineResult<O, S, E> =
     Result<(EngineOutput<O, S>, State<S>), EngineFailure<E, S>>;
 
-pub type EngineResultWithSnapshot<O, S: Snapshotable, E> =
+pub type EngineResultWithSnapshot<O, S, E> =
     Result<EngineOutputWithSnapshot<O, S>, EngineFailure<E, S>>;
 
 #[derive(thiserror::Error, Debug)]

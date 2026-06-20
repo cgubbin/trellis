@@ -1,5 +1,5 @@
 use num_traits::float::FloatCore;
-use tracing::{event, Level};
+use tracing::Level;
 
 use crate::engine::{EngineSignal, Termination};
 use crate::progress::Progress;

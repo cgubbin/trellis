@@ -6,11 +6,10 @@
 //! - termination metadata (success vs early stop)
 
 use crate::{
-    state::{Snapshotable, State, StateView, UserState},
+    state::{Snapshotable, StateView, UserState},
     Termination,
 };
 use num_traits::float::FloatCore;
-use std::fmt;
 
 /// Summary information describing a completed engine run.
 #[derive(Clone, Debug)]
