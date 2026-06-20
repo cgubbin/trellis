@@ -74,44 +74,40 @@ where
 {
     fn observe(&self, _: &'static str, state: StateView<'_, S>, event: &EngineSignal<S::Float>) {
         let mut inner = self.inner.lock().unwrap();
-        match event {
-            EngineSignal::Progress(progress) => {
-                inner.iterations = state.iteration();
+        if let EngineSignal::Progress(progress) = event {
+            inner.iterations = state.iteration();
 
-                match progress {
-                    Progress::Measure(measure) => {
-                        inner.last_metric = Some(*measure);
+            match progress {
+                Progress::Measure(measure) => {
+                    inner.last_metric = Some(*measure);
 
-                        inner.best_metric = match inner.best_metric {
-                            Some(best) if best <= *measure => Some(best),
-                            _ => Some(*measure),
-                        };
-                    }
-
-                    Progress::Report {
-                        diagnostics,
-                        measure,
-                    } => {
-                        inner.last_metric = Some(*measure);
-
-                        inner.best_metric = match inner.best_metric {
-                            Some(best) if best <= *measure => Some(best),
-                            _ => Some(*measure),
-                        };
-
-                        if let Some(a) = diagnostics.absolute_error {
-                            inner.best_absolute = Some(inner.best_absolute.map_or(a, |b| b.min(a)));
-                        }
-                        if let Some(r) = diagnostics.relative_error {
-                            inner.best_relative = Some(inner.best_relative.map_or(r, |b| b.min(r)));
-                        }
-                    }
-
-                    Progress::Complete => {}
+                    inner.best_metric = match inner.best_metric {
+                        Some(best) if best <= *measure => Some(best),
+                        _ => Some(*measure),
+                    };
                 }
-            }
 
-            _ => {}
+                Progress::Report {
+                    diagnostics,
+                    measure,
+                } => {
+                    inner.last_metric = Some(*measure);
+
+                    inner.best_metric = match inner.best_metric {
+                        Some(best) if best <= *measure => Some(best),
+                        _ => Some(*measure),
+                    };
+
+                    if let Some(a) = diagnostics.absolute_error {
+                        inner.best_absolute = Some(inner.best_absolute.map_or(a, |b| b.min(a)));
+                    }
+                    if let Some(r) = diagnostics.relative_error {
+                        inner.best_relative = Some(inner.best_relative.map_or(r, |b| b.min(r)));
+                    }
+                }
+
+                Progress::Complete => {}
+            }
         }
     }
 }

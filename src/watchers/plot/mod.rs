@@ -4,9 +4,8 @@ use crate::engine::EngineSignal;
 use crate::state::StateView;
 use crate::watchers::Observe;
 
-/// Reuses existing CSV plotting pipeline.
-mod plot;
-use plot::plot_csv;
+mod internal;
+use internal::plot_csv;
 
 /// Post-run observer that generates plots from recorded CSV output.
 ///

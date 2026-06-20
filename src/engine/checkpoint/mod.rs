@@ -38,15 +38,12 @@ where
     C: CheckpointBackend<<S as Snapshotable>::Snapshot, <S as UserState>::Float> + 'static,
 {
     fn handle(&mut self, state: StateView<'_, S>, signal: &EngineSignal<<S as UserState>::Float>) {
-        match signal {
-            EngineSignal::CheckpointRequested(_) => {
-                let checkpoint = CheckpointView::from(state);
+        if let EngineSignal::CheckpointRequested(_) = signal {
+            let checkpoint = CheckpointView::from(state);
 
-                if let Err(e) = self.store.save(checkpoint) {
-                    eprintln!("error saving checkpoint: {e:?}");
-                }
+            if let Err(e) = self.store.save(checkpoint) {
+                eprintln!("error saving checkpoint: {e:?}");
             }
-            _ => {}
         }
     }
 }

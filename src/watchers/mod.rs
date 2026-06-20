@@ -63,7 +63,7 @@ impl Frequency {
             Self::Never => false,
             Self::Always => true,
             Self::OnExit => matches!(event, EngineSignal::Termination(_)),
-            Self::Every(n) => *n != 0 && iteration % n == 0,
+            Self::Every(n) => *n != 0 && iteration.is_multiple_of(*n),
         }
     }
 }
@@ -104,7 +104,7 @@ impl<S: UserState> Observers<S> {
             }
 
             let obs = obs.lock().unwrap();
-            obs.observe(ident, state.clone(), event);
+            obs.observe(ident, state, event);
         }
     }
 }

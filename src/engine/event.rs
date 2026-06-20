@@ -17,6 +17,12 @@ pub struct EventBatch<F> {
     pub events: Vec<Progress<F>>,
 }
 
+impl<F> Default for EventBatch<F> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<F> EventBatch<F> {
     /// Generate and empty batch
     pub fn new() -> Self {

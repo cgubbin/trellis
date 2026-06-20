@@ -32,7 +32,7 @@ where
         state: StateView<'_, S>,
         event: &EngineSignal<S::Float>,
     ) {
-        if state.iteration() % self.every != 0 {
+        if !state.iteration().is_multiple_of(self.every) {
             return;
         }
 

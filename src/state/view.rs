@@ -21,7 +21,7 @@ impl<'a, S: UserState> Copy for StateView<'a, S> {}
 
 impl<'a, S: UserState> Clone for StateView<'a, S> {
     fn clone(&self) -> Self {
-        Self { state: self.state }
+        *self
     }
 }
 

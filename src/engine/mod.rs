@@ -217,7 +217,7 @@ where
         self.procedure
             .initialise_user_state(&self.problem, &mut state.user)?;
 
-        self.emit_event(&state, EngineSignal::Initialised);
+        self.emit_event(state, EngineSignal::Initialised);
 
         Ok(())
     }
@@ -228,7 +228,7 @@ where
         mut state: State<P::State>,
         reason: Termination,
     ) -> InternalEngineResult<P::Output, P::State, P::Error> {
-        match self.procedure.finalise(&mut self.problem, &mut state.user) {
+        match self.procedure.finalise(&mut self.problem, &state.user) {
             Err(e) => Err(EngineFailure::Procedure { error: e, state }),
             Ok(result) => {
                 state
@@ -266,7 +266,7 @@ where
             .convergence
             .observe(&progress, state.runtime.iteration());
 
-        self.emit_event(&state, EngineSignal::Progress(progress.clone()));
+        self.emit_event(state, EngineSignal::Progress(progress.clone()));
 
         let events = EventBatch::new().add(progress);
 
