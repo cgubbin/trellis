@@ -7,8 +7,8 @@ use std::{
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    engine::checkpoint::{Checkpoint, CheckpointError, CheckpointStore},
-    UserState,
+    engine::checkpoint::{Checkpoint, CheckpointBackend, CheckpointError, CheckpointView},
+    state::Snapshotable,
 };
 
 pub struct JsonCheckpointStore {
@@ -25,11 +25,12 @@ impl JsonCheckpointStore {
     }
 }
 
-impl<S> CheckpointStore<S> for JsonCheckpointStore
+impl<SN, F> CheckpointBackend<SN, F> for JsonCheckpointStore
 where
-    S: UserState + Serialize + DeserializeOwned,
+    SN: Serialize + DeserializeOwned,
+    F: Serialize + DeserializeOwned,
 {
-    fn save(&self, checkpoint: &Checkpoint<S>) -> Result<(), CheckpointError> {
+    fn save(&self, checkpoint: CheckpointView<'_, SN, F>) -> Result<(), CheckpointError> {
         if let Some(parent) = self.path.parent() {
             create_dir_all(parent)?;
         }
@@ -43,7 +44,7 @@ where
         Ok(())
     }
 
-    fn load(&self) -> Result<Option<Checkpoint<S>>, CheckpointError> {
+    fn load(&self) -> Result<Option<Checkpoint<SN, F>>, CheckpointError> {
         if !self.path.exists() {
             return Ok(None);
         }

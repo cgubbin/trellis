@@ -1,114 +1,122 @@
-//! This module defines the default output type for a trellis calculation, in addition to the error
-//! wrapper.
+//! This module defines the canonical output types produced by an [`Engine`] execution.
+//!
+//! It separates:
+//! - the *user-defined result* of a computation
+//! - the final solver state
+//! - termination metadata (success vs early stop)
 
-use crate::{State, Termination, UserState};
+use crate::{
+    state::{Snapshotable, State, StateView, UserState},
+    Termination,
+};
 use num_traits::float::FloatCore;
 use std::fmt;
 
-pub struct TerminatedOutput<O, S>
-where
-    S: UserState,
-{
-    pub termination: Termination,
-    pub result: Output<O, S>,
+/// Summary information describing a completed engine run.
+#[derive(Clone, Debug)]
+pub struct RunSummary<F> {
+    /// Final iteration count.
+    pub iterations: usize,
+
+    /// Total execution time.
+    pub elapsed: std::time::Duration,
+
+    /// Best metric value observed during the run.
+    pub best_measure: Option<F>,
 }
 
-/// The output of a calculation
-///
-/// The calculation output is user defined in the finalise step of the [`Calculation`] trait, but
-/// this is presented as a good verbose option in situations where the caller wants granular
-/// information about the calculation and its progress. It returns the entire original problem,
-/// solver and state object.
-pub struct Output<R, S>
-where
-    S: UserState,
-{
-    /// The original calculation carried out by `trellis`
-    pub result: R,
-    /// Solver state after the last iterationn
-    pub state: State<S>,
-}
-
-impl<R, S> std::fmt::Display for Output<R, S>
-where
-    R: fmt::Display,
-    S: UserState,
-    <S as UserState>::Float: FloatCore,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(termination) = self.state.runtime.termination() {
-            use crate::Termination::*;
-            match termination {
-                Converged => {
-                    writeln!(
-                        f,
-                        "Solver converged after {} iterations",
-                        self.state.runtime.iteration()
-                    )?;
-                    if let Some(duration) = self.state.runtime.duration() {
-                        writeln!(f, "Duration {:?}", duration)?;
-                    }
-                    writeln!(f, "{}", self.result)?;
-                }
-                Cancelled => {
-                    writeln!(
-                        f,
-                        "Solver cancelled after {} iterations",
-                        self.state.runtime.iteration()
-                    )?;
-                }
-                ExceededMaxIterations => {
-                    writeln!(
-                        f,
-                        "Solver exceeded maximum iterations ({})",
-                        self.state.runtime.iteration()
-                    )?;
-                }
-                Stagnated => {
-                    writeln!(
-                        f,
-                        "Solver stagnant for ({}) iterations",
-                        self.state.iterations_since_best()
-                    )?;
-                }
-                Timeout => {
-                    writeln!(
-                        f,
-                        "Solver timed out for ({:?}) ",
-                        self.state.runtime.duration()
-                    )?;
-                }
-            }
-        } else {
-            writeln!(f, "Solver is still in progress.")?;
+impl<F> RunSummary<F> {
+    pub(crate) fn new<S>(state: StateView<'_, S>) -> RunSummary<F>
+    where
+        S: UserState<Float = F>,
+        F: FloatCore,
+    {
+        Self {
+            iterations: state.iteration(),
+            elapsed: state.duration(),
+            best_measure: Some(state.best_measure()),
         }
-        Ok(())
     }
 }
 
-impl<R, S> Output<R, S>
+/// Result of a completed calculation.
+///
+/// Returned by [`Engine::run`].
+pub struct EngineOutput<R, S>
 where
     S: UserState,
 {
-    pub(crate) fn new(result: R, state: State<S>) -> Self {
-        Self { result, state }
+    /// User-defined result produced by the procedure.
+    pub result: R,
+
+    /// Execution summary.
+    pub summary: RunSummary<S::Float>,
+
+    /// Reason execution terminated.
+    pub termination: Termination,
+}
+
+/// Result of a completed calculation including a restart snapshot.
+///
+/// Returned by [`Engine::run_with_snapshot`].
+pub struct EngineOutputWithSnapshot<R, S>
+where
+    S: UserState + Snapshotable,
+{
+    /// User-defined result produced by the procedure.
+    pub result: R,
+
+    /// Snapshot captured from the final state.
+    pub snapshot: S::Snapshot,
+
+    /// Execution summary.
+    pub summary: RunSummary<S::Float>,
+
+    /// Reason execution terminated.
+    pub termination: Termination,
+}
+
+impl<R, S> EngineOutput<R, S>
+where
+    S: UserState,
+{
+    pub(crate) fn new(result: R, state: StateView<'_, S>, termination: Termination) -> Self {
+        let summary = RunSummary::new(state);
+        Self {
+            result,
+            summary,
+            termination,
+        }
+    }
+
+    pub fn with_snapshot(self, snapshot: S::Snapshot) -> EngineOutputWithSnapshot<R, S>
+    where
+        S: UserState + Snapshotable,
+    {
+        EngineOutputWithSnapshot {
+            result: self.result,
+            summary: self.summary,
+            termination: self.termination,
+            snapshot,
+        }
     }
 }
 
 #[derive(thiserror::Error, Debug)]
-/// An error wrapper for trellis calculations
+/// Error returned when engine execution fails during procedure execution.
 ///
-/// The error wraps the underlying error type [`ErrorCause`], which contains information about the
-/// reason the calculation failed. In addition it can optionally return the an output from the
-/// calculation. This is useful in situations where a failure occured due to running out of
-/// iterations, or termination from the parent thread, but the state of the calculation at that
-/// point may still contain meaningful information. Maybe the calculation ran out of iterations
-/// because it was unable to reach the required tolerance, but is still at convergence?
+/// This error wraps:
+/// - the underlying procedure error (`E`)
+/// - optionally a partial output (`O`) representing the last known state
+///
+/// This is useful for partial recovery scenarios where:
+/// - execution failed mid-run
+/// - but the solver state is still meaningful
 pub struct TrellisError<O, E> {
     #[source]
-    /// The underlying error cause.
     pub error: E,
-    /// An optional result which can be extracted by the caller
+
+    /// Optional partial result produced before failure.
     pub result: Option<O>,
 }
 

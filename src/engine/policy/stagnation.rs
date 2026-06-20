@@ -6,8 +6,7 @@
 //!
 //! - Maintains a fixed-size history of recent values.
 //! - Values are extracted from:
-//!   - `Progress::Metric`
-//!   - `Progress::ErrorEstimate` (absolute)
+//!   - `Progress::Measure`
 //!
 //! - Once enough samples are collected:
 //!
@@ -50,8 +49,7 @@ impl<F: FloatCore> EnginePolicy<F> for StagnationPolicy<F> {
     fn decide(&mut self, batch: &EventBatch<F>, _ctx: &EngineContext) -> EngineAction {
         for e in &batch.events {
             let v = match e {
-                Progress::Metric { value } => *value,
-                Progress::ErrorEstimate { absolute, .. } => *absolute,
+                Progress::Measure(value) => *value,
                 _ => continue,
             };
 
@@ -88,7 +86,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::new().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Measure(v))
     }
 
     #[test]
@@ -125,7 +123,7 @@ mod test {
         let seq = vec![1.0, 1.0001, 1.0002, 2.0];
 
         for v in seq {
-            let batch = EventBatch::new().add(Progress::Metric { value: v });
+            let batch = EventBatch::new().add(Progress::Measure(v));
 
             let res = stack.decide(&batch, &ctx);
 

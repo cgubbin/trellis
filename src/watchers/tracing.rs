@@ -1,87 +1,102 @@
 use num_traits::float::FloatCore;
-use tracing::{debug, info, trace, Level, Value};
+use tracing::{event, Level};
 
 use crate::engine::{EngineSignal, Termination};
 use crate::progress::Progress;
 use crate::state::{StateView, UserState};
 use crate::watchers::Observe;
 
+macro_rules! log_at_level {
+    ($level:expr, $($arg:tt)*) => {{
+        match $level {
+            tracing::Level::ERROR => tracing::error!($($arg)*),
+            tracing::Level::WARN => tracing::warn!($($arg)*),
+            tracing::Level::INFO => tracing::info!($($arg)*),
+            tracing::Level::DEBUG => tracing::debug!($($arg)*),
+            tracing::Level::TRACE => tracing::trace!($($arg)*),
+        }
+    }};
+}
+
+/// Structured tracing observer for engine execution.
+///
+/// This observer emits lifecycle and progress events using the `tracing`
+/// ecosystem. It is designed to remain thin and not interpret numerical
+/// semantics beyond formatting.
 #[derive(Clone)]
 pub struct Tracer {
     level: Level,
 }
 
 impl Tracer {
+    /// Create a new tracer with a base logging level.
+    ///
+    /// Only INFO, DEBUG, and TRACE are supported. ERROR/WARN are rejected
+    /// because this observer is not intended for failure signaling.
     pub fn new(level: Level) -> Self {
         if matches!(level, Level::ERROR | Level::WARN) {
-            panic!("Tracer only supports INFO/DEBUG/TRACE levels");
+            panic!("Tracer only supports INFO, DEBUG, TRACE levels");
         }
 
         Self { level }
     }
 
-    fn lifecycle(&self, message: &str, ident: &str) {
-        match self.level {
-            Level::INFO => info!("{message}: {ident}"),
-            Level::DEBUG => debug!("{message}: {ident}"),
-            Level::TRACE => trace!("{message}: {ident}"),
-            _ => unreachable!(),
-        }
+    fn lifecycle(&self, ident: &str, event_name: &str) {
+        log_at_level!(
+            self.level,
+            target: "engine.lifecycle",
+            ident = ident,
+            event = event_name,
+        );
     }
 
     fn termination(&self, ident: &str, termination: Termination) {
-        match self.level {
-            Level::INFO => info!(?termination, "terminated: {ident}"),
-            Level::DEBUG => debug!(?termination, "terminated: {ident}"),
-            Level::TRACE => trace!(?termination, "terminated: {ident}"),
-            _ => unreachable!(),
-        }
+        log_at_level!(
+            self.level,
+            target: "engine.termination",
+            ident = ident,
+            ?termination
+        );
     }
 
     fn progress<S>(&self, state: StateView<'_, S>, progress: &Progress<S::Float>)
     where
         S: UserState,
-        S::Float: FloatCore + Value,
+        S::Float: FloatCore + tracing::Value,
     {
         match progress {
-            Progress::ErrorEstimate { absolute, relative } => match self.level {
-                Level::INFO => info!(
+            Progress::Measure(value) => {
+                log_at_level!(
+                    self.level,
+                    target: "engine.progress",
+                    kind = "metric",
                     iteration = state.iteration(),
-                    current = *absolute,
-                    relative = *relative,
-                    best = state.best_measure(),
-                    since_best = state.iterations_since_best(),
-                ),
-                Level::DEBUG => debug!(
-                    iteration = state.iteration(),
-                    current = *absolute,
-                    relative = *relative,
-                    best = state.best_measure(),
-                    since_best = state.iterations_since_best(),
-                ),
-                Level::TRACE => trace!(
-                    iteration = state.iteration(),
-                    current = *absolute,
-                    relative = *relative,
-                    best = state.best_measure(),
-                    since_best = state.iterations_since_best(),
-                ),
-                _ => unreachable!(),
-            },
+                    value = *value
+                );
+            }
 
-            Progress::Metric { value } => match self.level {
-                Level::INFO => info!(iteration = state.iteration(), value = *value,),
-                Level::DEBUG => debug!(iteration = state.iteration(), value = *value,),
-                Level::TRACE => trace!(iteration = state.iteration(), value = *value,),
-                _ => unreachable!(),
-            },
+            Progress::Report {
+                measure,
+                diagnostics,
+            } => {
+                log_at_level!(
+                    self.level,
+                    target: "engine.progress",
+                    kind = "report",
+                    iteration = state.iteration(),
+                    measure = *measure,
+                    ?diagnostics
+                );
+            }
 
-            Progress::Complete => match self.level {
-                Level::INFO => info!(iteration = state.iteration(), "completion reported"),
-                Level::DEBUG => debug!(iteration = state.iteration(), "completion reported"),
-                Level::TRACE => trace!(iteration = state.iteration(), "completion reported"),
-                _ => unreachable!(),
-            },
+            Progress::Complete => {
+                log_at_level!(
+                    self.level,
+                    target: "engine.progress",
+                    kind = "complete",
+                    iteration = state.iteration()
+                );
+            }
         }
     }
 }
@@ -89,7 +104,7 @@ impl Tracer {
 impl<S> Observe<S> for Tracer
 where
     S: UserState,
-    S::Float: FloatCore + Value,
+    S::Float: FloatCore + tracing::Value,
 {
     fn observe(
         &self,
@@ -99,11 +114,15 @@ where
     ) {
         match event {
             EngineSignal::Initialised => {
-                self.lifecycle("initialising", ident);
+                self.lifecycle(ident, "initialised");
             }
 
             EngineSignal::CheckpointSaved => {
-                self.lifecycle("checkpoint saved", ident);
+                self.lifecycle(ident, "checkpoint_saved");
+            }
+
+            EngineSignal::CheckpointRequested(_) => {
+                self.lifecycle(ident, "checkpoint_requested");
             }
 
             EngineSignal::Termination(reason) => {

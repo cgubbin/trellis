@@ -4,7 +4,7 @@
 //!
 //! ## Behaviour
 //!
-//! - Monitors `Progress::Metric` values.
+//! - Monitors `Progress::Measure` values.
 //! - If any value <= `target`, termination is triggered.
 //!
 //! ## Termination
@@ -42,7 +42,7 @@ where
     fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
         for each in &batch.events {
             match each {
-                Progress::Metric { value } if *value <= self.target => {
+                Progress::Measure(value) if *value <= self.target => {
                     return EngineAction::Stop(Termination::Converged);
                 }
                 _ => {}
@@ -60,7 +60,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::new().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Measure(v))
     }
 
     #[test]

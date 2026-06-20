@@ -88,6 +88,9 @@ pub enum EngineSignal<F> {
     /// A checkpoint has been successfully persisted.
     CheckpointSaved,
 
+    /// A checkpoint has been requested.
+    CheckpointRequested(CheckpointReason),
+
     /// Engine has terminated for any reason.
     Termination(Termination),
 }
@@ -100,6 +103,7 @@ impl<F> EngineSignal<F> {
             Self::Progress(_) => "progress",
             Self::CheckpointSaved => "checkpoint_saved",
             Self::Termination(_) => "termination",
+            Self::CheckpointRequested(_) => "checkpoint_requested",
         }
     }
 }
@@ -110,8 +114,8 @@ mod tests {
     #[test]
     fn event_batch_accumulates_events() {
         let batch = EventBatch::new()
-            .add(Progress::Metric { value: 1.0 })
-            .add(Progress::Metric { value: 2.0 });
+            .add(Progress::Measure(1.0))
+            .add(Progress::Measure(2.0));
 
         assert_eq!(batch.events.len(), 2);
     }

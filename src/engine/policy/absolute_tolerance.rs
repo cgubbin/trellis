@@ -4,7 +4,7 @@
 //!
 //! ## Behaviour
 //!
-//! - Consumes `Progress::ErrorEstimate` events.
+//! - Consumes `Progress::Measure` events.
 //! - Checks `absolute < tolerance`.
 //!
 //! ## Termination
@@ -29,45 +29,18 @@ impl<F> AbsoluteTolerancePolicy<F> {
     }
 }
 
-pub struct RelativeTolerancePolicy<F> {
-    tolerance: F,
-}
-
-impl<F> RelativeTolerancePolicy<F> {
-    pub fn new(tolerance: F) -> Self {
-        Self { tolerance }
-    }
-}
-
 impl<F> EnginePolicy<F> for AbsoluteTolerancePolicy<F>
 where
     F: FloatCore,
 {
     fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
         for each in &batch.events {
-            match each {
-                Progress::ErrorEstimate { absolute, .. } if *absolute < self.tolerance => {
-                    return EngineAction::Stop(crate::Termination::Converged);
+            if let Progress::Report { diagnostics, .. } = each {
+                if let Some(abs) = diagnostics.absolute_error {
+                    if abs < self.tolerance {
+                        return EngineAction::Stop(crate::Termination::Converged);
+                    }
                 }
-                _ => {}
-            }
-        }
-
-        EngineAction::Continue
-    }
-}
-
-impl<F> EnginePolicy<F> for RelativeTolerancePolicy<F>
-where
-    F: FloatCore,
-{
-    fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
-        for each in &batch.events {
-            match each {
-                Progress::ErrorEstimate { relative, .. } if *relative < self.tolerance => {
-                    return EngineAction::Stop(crate::Termination::Converged);
-                }
-                _ => {}
             }
         }
 
@@ -80,15 +53,18 @@ mod tests {
     use super::*;
     use crate::engine::policy::PolicyStack;
     use crate::engine::{EngineContext, EventBatch};
-    use crate::progress::Progress;
+    use crate::progress::{Progress, ProgressDiagnostics};
 
     #[test]
     fn absolute_tolerance_stops_on_error_below_threshold() {
         let mut stack = PolicyStack::<f64>::new().add(AbsoluteTolerancePolicy::new(0.1));
 
-        let batch = EventBatch::new().add(Progress::ErrorEstimate {
-            absolute: 0.05,
-            relative: 0.2,
+        let batch = EventBatch::new().add(Progress::Report {
+            measure: 1.0,
+            diagnostics: ProgressDiagnostics {
+                absolute_error: Some(0.05),
+                ..Default::default()
+            },
         });
 
         let ctx = EngineContext::default();
@@ -103,9 +79,12 @@ mod tests {
     fn absolute_tolerance_continues_above_threshold() {
         let mut stack = PolicyStack::<f64>::new().add(AbsoluteTolerancePolicy::new(0.1));
 
-        let batch = EventBatch::new().add(Progress::ErrorEstimate {
-            absolute: 0.5,
-            relative: 0.2,
+        let batch = EventBatch::new().add(Progress::Report {
+            measure: 1.0,
+            diagnostics: ProgressDiagnostics {
+                absolute_error: Some(0.5),
+                ..Default::default()
+            },
         });
 
         let ctx = EngineContext::default();

@@ -1,30 +1,67 @@
+/// Core solver state representation.
+///
+/// This module defines the runtime state used by the engine during execution.
+///
+/// The state is split into three components:
+///
+/// - `user`: application-defined state implementing [`UserState`]
+/// - `runtime`: engine execution metadata (iteration count, timing)
+/// - `convergence`: tracking of numerical convergence behaviour
+///
+/// ## Design principles
+///
+/// - The engine owns a single mutable `State<S>` during execution
+/// - External code interacts with state via [`StateView`], not direct access
+/// - Persistence is handled via [`Snapshotable`] + checkpointing systems
+///
+/// ## Separation of concerns
+///
+/// - `UserState` defines problem-specific behaviour
+/// - `RuntimeState` tracks execution lifecycle
+/// - `ConvergenceState` tracks numerical progress
+///
+/// These components are intentionally isolated to avoid coupling
+/// solver logic with infrastructure concerns.
+///
+/// ## Notes
+///
+/// - `State` is not exposed mutably outside the engine
+/// - Access is mediated via `StateView<'_>`
+/// - Persistence uses snapshot types derived from `Snapshotable`
 mod convergence;
 mod runtime;
 mod user;
 mod view;
 
-use crate::TrellisFloat;
-use convergence::ConvergenceState;
-use runtime::RuntimeState;
+pub use user::{Snapshotable, StateRestorer, UserState};
 
-pub use user::{Snapshotable, UserState};
+use crate::TrellisFloat;
+pub(crate) use convergence::ConvergenceState;
+pub(crate) use runtime::RuntimeState;
+
 pub(crate) use view::StateView;
 
 use num_traits::float::FloatCore;
 use serde::{Deserialize, Serialize};
 
-/// The state of the [`trellis`] solver
+/// Internal execution state of the solver.
 ///
-/// This contains generic fields common to all solvers, as well as a user-defined state
-/// `S` which contains application specific fields.
+/// This struct is owned exclusively by the [`Engine`] during execution
+/// and is not intended to be modified directly by users.
+///
+/// Access to state is provided through [`StateView`].
+///
+/// # Fields
+/// - `user`: user-defined state implementing [`UserState`]
+/// - `runtime`: execution metadata (iteration count, duration)
+/// - `convergence`: convergence tracking for policies
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct State<S: UserState> {
-    /// The user component of the state implements the application specific code
-    pub(crate) user: S,
-
     pub(crate) runtime: RuntimeState,
 
     pub(crate) convergence: ConvergenceState<S::Float>,
+    /// The user component of the state implements the application specific code
+    pub(crate) user: S,
 }
 
 impl<S> State<S>
@@ -32,22 +69,16 @@ where
     S: UserState,
     <S as UserState>::Float: FloatCore,
 {
-    /// Create a new instance of the iteration state
-    pub(crate) fn new() -> Self {
+    /// Creates a fresh solver state.
+    ///
+    /// Initializes:
+    /// - runtime counters at zero
+    /// - convergence tracking at initial values
+    pub(crate) fn new(user: S) -> Self {
         Self {
-            user: S::default(),
+            user,
             runtime: RuntimeState::new(),
             convergence: ConvergenceState::new(),
         }
-    }
-
-    /// Returns the number of iterations since the best result was observed
-    pub(crate) fn iterations_since_best(&self) -> usize {
-        self.convergence
-            .iterations_since_best(self.runtime.iteration())
-    }
-
-    pub fn record(&mut self, value: S::Float) -> bool {
-        self.convergence.record(value, self.runtime.iteration())
     }
 }

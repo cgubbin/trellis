@@ -36,7 +36,7 @@
 //!
 //! ## Checkpointing
 //!
-//! Checkpoints are optional and handled via [`CheckpointStore`].
+//! Checkpoints are optional and handled via [`CheckpointBackend`].
 //! They are triggered by policy decisions, not directly by the procedure.
 //!
 //! ## Observers
@@ -64,6 +64,7 @@ mod cancellation;
 mod checkpoint;
 mod context;
 mod event;
+mod extensions;
 mod policy;
 mod result;
 mod termination;
@@ -71,11 +72,13 @@ mod termination;
 use crate::progress::Progress;
 pub use builder::GenerateBuilder;
 pub use cancellation::CancellationGuard;
-pub use checkpoint::{Checkpoint, CheckpointStore};
+pub use checkpoint::{Checkpoint, CheckpointBackend, CheckpointView};
 use context::EngineContext;
 pub(crate) use event::{EngineAction, EngineSignal, EventBatch};
+use extensions::{EngineSink, Extensions};
 use policy::{EnginePolicy, PolicyStack};
-pub use result::{EngineFailure, EngineOutput, EngineResult};
+use result::InternalEngineResult;
+pub use result::{EngineFailure, EngineResult, EngineResultWithSnapshot};
 pub use termination::Termination;
 
 use num_traits::float::FloatCore;
@@ -84,12 +87,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 use crate::{
-    state::{State, StateView},
+    result::EngineOutput,
+    state::{Snapshotable, State, StateView},
     Problem, Procedure,
 };
-use crate::{watchers::Observers, Output, UserState};
-
-pub type Error = Box<dyn std::error::Error>;
+use crate::{watchers::Observers, UserState};
 
 /// Core execution engine for iterative procedures.
 ///
@@ -104,7 +106,7 @@ pub type Error = Box<dyn std::error::Error>;
 /// - `P`: the computation procedure
 /// - `Q`: policy implementation (usually [`PolicyStack`])
 /// - `C`: checkpoint storage backend
-pub struct Engine<P, Q, C>
+pub struct Engine<P, Q>
 where
     P: Procedure,
     P::State: UserState,
@@ -129,52 +131,69 @@ where
 
     observers: Observers<P::State>,
 
-    checkpoint_store: Option<C>,
+    extensions: Extensions<P::State>,
 }
 
-impl<P, Q, C> Engine<P, Q, C>
+impl<P, Q> Engine<P, Q>
 where
     P: Procedure,
     P::State: UserState,
     <P::State as UserState>::Float: FloatCore,
-    C: CheckpointStore<P::State>,
     Q: EnginePolicy<<P::State as UserState>::Float>,
 {
+    pub fn run_with_snapshot(mut self) -> EngineResultWithSnapshot<P::Output, P::State, P::Error>
+    where
+        P::State: Snapshotable,
+    {
+        let result = self._run();
+
+        result.map(|(output, state)| output.with_snapshot(state.user.snapshot()))
+    }
+
     pub fn run(mut self) -> EngineResult<P::Output, P::State, P::Error> {
+        self._run().map(|internal| internal.0)
+    }
+
+    fn _run(mut self) -> InternalEngineResult<P::Output, P::State, P::Error> {
         let mut state = self.state.take().unwrap();
 
-        self.initialise_state(&mut state)
-            .map_err(|error| EngineFailure::Procedure {
-                error,
-                state: state.clone(),
-            })?;
+        if let Err(e) = self.initialise_state(&mut state) {
+            return Err(EngineFailure::Procedure { error: e, state });
+        }
 
         loop {
-            let batch = self
-                .step_once(&mut state)
-                .map_err(|(error, state)| EngineFailure::Procedure { error, state })?;
+            let result = self.policy_step(&mut state);
+            if let Err(e) = result {
+                return Err(EngineFailure::Procedure { error: e, state });
+            }
 
-            let ctx = EngineContext {
-                iter: state.runtime.iteration(),
-                elapsed: self.start_time().elapsed(),
-                cancelled: self.cancellation.is_cancelled(),
-                checkpoint_due: false,
-                start_time: self.start_time(),
-                _marker: Default::default(),
-            };
-
-            let action = self.policy.decide(&batch, &ctx);
-
-            match action {
+            match result.unwrap() {
                 EngineAction::Continue => continue,
                 EngineAction::Stop(reason) => {
-                    state.runtime.terminate(reason);
-                    self.observe(&state, EngineSignal::Termination(reason));
-                    return self.finalise(state);
+                    self.emit_event(&state, EngineSignal::Termination(reason));
+                    return self.finalise(state, reason);
                 }
-                EngineAction::EmitCheckpoint(reason) => self.emit_checkpoint(&state, reason),
+                EngineAction::EmitCheckpoint(reason) => {
+                    self.emit_event(&state, EngineSignal::CheckpointRequested(reason));
+                }
             }
         }
+    }
+
+    fn policy_step(&mut self, state: &mut State<P::State>) -> Result<EngineAction, P::Error> {
+        let batch = self.step_once(state)?;
+
+        let ctx = EngineContext {
+            iter: state.runtime.iteration(),
+            elapsed: self.start_time().elapsed(),
+            cancelled: self.cancellation.is_cancelled(),
+            checkpoint_due: false,
+            start_time: self.start_time(),
+            _marker: Default::default(),
+        };
+
+        let action = self.policy.decide(&batch, &ctx);
+        Ok(action)
     }
 
     fn start_time(&self) -> Instant {
@@ -185,10 +204,13 @@ where
     #[instrument(name = "initialising runner", fields(ident = P::NAME), skip_all)]
     fn initialise_state(&mut self, state: &mut State<P::State>) -> Result<(), P::Error> {
         self.start_time = Some(Instant::now());
+        state
+            .runtime
+            .record_duration(Instant::now() - self.start_time.unwrap());
         self.procedure
-            .initialise(&mut self.problem, &mut state.user)?;
+            .initialise_user_state(&self.problem, &mut state.user)?;
 
-        self.observe(&state, EngineSignal::Initialised);
+        self.emit_event(&state, EngineSignal::Initialised);
 
         Ok(())
     }
@@ -197,42 +219,39 @@ where
     fn finalise(
         &mut self,
         mut state: State<P::State>,
-    ) -> EngineResult<P::Output, P::State, P::Error> {
-        let output = self
-            .procedure
-            .finalise(&mut self.problem, &mut state.user)
-            .map_err(|e| EngineFailure::Procedure {
-                error: e,
-                state: state.clone(),
-            })?;
+        reason: Termination,
+    ) -> InternalEngineResult<P::Output, P::State, P::Error> {
+        match self.procedure.finalise(&mut self.problem, &mut state.user) {
+            Err(e) => Err(EngineFailure::Procedure { error: e, state }),
+            Ok(result) => {
+                state
+                    .runtime
+                    .record_duration(Instant::now() - self.start_time.unwrap());
 
-        let output = Output::new(output, state.clone());
-
-        match state.runtime.termination().unwrap() {
-            Termination::Converged => Ok(EngineOutput::Success(output)),
-            termination => Ok(EngineOutput::Terminated {
-                termination,
-                output,
-            }),
+                Ok((
+                    EngineOutput::new(result, StateView::new(&state), reason),
+                    state,
+                ))
+            }
         }
     }
 
     fn step_once(
         &mut self,
         state: &mut State<P::State>,
-    ) -> Result<EventBatch<<P::State as UserState>::Float>, (P::Error, State<P::State>)> {
+    ) -> Result<EventBatch<<P::State as UserState>::Float>, P::Error> {
         state.runtime.increment_iteration();
+        state
+            .runtime
+            .record_duration(Instant::now() - self.start_time.unwrap());
 
-        let prev = state.clone();
-        self.procedure
-            .step(
-                &mut self.problem,
-                &mut state.user,
-                CancellationGuard {
-                    token: &self.cancellation,
-                },
-            )
-            .map_err(|e| (e, prev))?;
+        self.procedure.step(
+            &mut self.problem,
+            &mut state.user,
+            CancellationGuard {
+                token: &self.cancellation,
+            },
+        )?;
 
         let progress = state.user.progress();
 
@@ -240,30 +259,23 @@ where
             .convergence
             .observe(&progress, state.runtime.iteration());
 
-        self.observe(&state, EngineSignal::Progress(progress.clone()));
+        self.emit_event(&state, EngineSignal::Progress(progress.clone()));
 
         let events = EventBatch::new().add(progress);
 
         Ok(events)
     }
 
-    fn observe(
-        &self,
+    fn emit_event(
+        &mut self,
         state: &State<P::State>,
-        stage: EngineSignal<<P::State as UserState>::Float>,
+        signal: EngineSignal<<P::State as UserState>::Float>,
     ) {
         let state_view = StateView::new(state);
-        self.observers.dispatch(P::NAME, state_view, &stage);
-    }
 
-    fn emit_checkpoint(&self, state: &State<P::State>, _reason: event::CheckpointReason) {
-        if let Some(checkpoint_store) = self.checkpoint_store.as_ref() {
-            let checkpoint = Checkpoint::new(state);
-            if let Err(e) = checkpoint_store.save(&checkpoint) {
-                tracing::warn!(error = ?e, "checkpoint save failed");
-            }
-            self.observe(&state, EngineSignal::CheckpointSaved);
-        }
+        self.extensions.dispatch(state_view, &signal);
+
+        self.observers.dispatch(P::NAME, state_view, &signal);
     }
 }
 
@@ -293,10 +305,18 @@ mod test {
         type Float = f64;
 
         fn progress(&self) -> Progress<Self::Float> {
-            let rep = Progress::Metric { value: self.value };
+            let rep = Progress::Measure(self.value);
 
             dbg!(&rep);
             rep
+        }
+    }
+
+    impl Snapshotable for DummyState {
+        type Snapshot = Self;
+
+        fn snapshot(&self) -> Self::Snapshot {
+            self.clone()
         }
     }
 
@@ -309,9 +329,9 @@ mod test {
 
         const NAME: &'static str = "Dummy Procedure";
 
-        fn initialise(
-            &mut self,
-            _: &mut Problem<()>,
+        fn initialise_user_state(
+            &self,
+            _: &Problem<()>,
             _: &mut DummyState,
         ) -> Result<(), DummyError> {
             Ok(())
@@ -342,6 +362,7 @@ mod test {
         let engine = Dummy
             .build_for(())
             .and_policy(TargetValuePolicy::new(0.0))
+            .with_initial_state(DummyState::default())
             .finalise();
 
         let result = engine.run();
@@ -354,16 +375,12 @@ mod test {
         let engine = Dummy
             .build_for(())
             .and_policy(MaxIterationPolicy::new(3))
+            .with_initial_state(DummyState::default())
             .finalise();
 
         let result = engine.run().unwrap();
 
-        match result {
-            EngineOutput::Terminated { termination, .. } => {
-                assert_eq!(termination, Termination::ExceededMaxIterations);
-            }
-            _ => panic!("Expected termination"),
-        }
+        assert_eq!(result.termination, Termination::ExceededMaxIterations);
     }
 
     use crate::watchers::{Frequency, Observe};
@@ -396,6 +413,7 @@ mod test {
             .build_for(())
             .attach_observer(spy.clone(), Frequency::Always)
             .and_policy(MaxIterationPolicy::new(10))
+            .with_initial_state(DummyState::default())
             .finalise();
 
         let _ = engine.run();
@@ -408,9 +426,10 @@ mod test {
 
         let engine = Dummy
             .build_for(())
-            .with_checkpoint_store(store.clone())
+            .with_checkpoint_backend(store.clone())
             .and_policy(CheckpointPolicy::every(5))
             .and_policy(MaxIterationPolicy::new(10))
+            .with_initial_state(DummyState::default())
             .finalise();
 
         let _ = engine.run();
@@ -418,56 +437,20 @@ mod test {
         assert!(store.saved_count() > 0);
     }
 
-    // #[test]
-    // fn full_convergence_pipeline() {
-    //     let engine = Dummy
-    //         .build_for(())
-    //         .and_policy(TargetValuePolicy::new(0.01))
-    //         .attach_observer(Tracer::new(Level::INFO), Frequency::Always)
-    //         .finalise();
+    #[test]
+    fn full_convergence_pipeline() {
+        let engine = Dummy
+            .build_for(())
+            .and_policy(TargetValuePolicy::new(0.01))
+            .attach_observer(
+                crate::watchers::Tracer::new(tracing::Level::INFO),
+                Frequency::Always,
+            )
+            .with_initial_state(DummyState::default())
+            .finalise();
 
-    //     let result = engine.run().unwrap();
+        let result = engine.run().unwrap();
 
-    //     assert!(matches!(result, EngineOutput::Success(_)));
-    // }
+        assert_eq!(result.termination, Termination::Converged);
+    }
 }
-
-//     #[test]
-//     fn stagnation_terminates_engine() {
-//         let engine = Dummy
-//             .build_for(())
-//             .and_policy(StagnationPolicy::new(5))
-//             .finalise();
-
-//         let result = engine.run().unwrap();
-
-//         match result {
-//             EngineOutput::Terminated { termination, .. } => {
-//                 assert_eq!(termination, Termination::Stagnated);
-//             }
-//             _ => panic!(),
-//         }
-//     }
-
-//     #[test]
-//     fn cancellation_stops_engine() {
-//         let token = CancellationToken::new();
-//         token.cancel();
-
-//         let engine = Dummy
-//             .build_for(())
-//             .cancellation_token(token)
-//             .and_policy(CancellationPolicy)
-//             .finalise();
-
-//         let result = engine.run().unwrap();
-
-//         assert!(matches!(
-//             result,
-//             EngineOutput::Terminated {
-//                 termination: Termination::Cancelled,
-//                 ..
-//             }
-//         ));
-//     }
-// }

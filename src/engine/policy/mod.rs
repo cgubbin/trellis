@@ -257,9 +257,12 @@ mod tests {
 
         let ctx = EngineContext::default();
 
-        let batch = EventBatch::new().add(Progress::ErrorEstimate {
-            absolute: 0.001,
-            relative: 0.2,
+        let batch = EventBatch::new().add(Progress::Report {
+            measure: 1.0,
+            diagnostics: crate::progress::ProgressDiagnostics {
+                absolute_error: Some(0.001),
+                ..Default::default()
+            },
         });
 
         let action = stack.decide(&batch, &ctx);
@@ -279,7 +282,7 @@ mod tests {
         let ctx = EngineContext::default();
 
         for _ in 0..10 {
-            let batch = EventBatch::new().add(Progress::Metric { value: 1.0 });
+            let batch = EventBatch::new().add(Progress::Measure(1.0));
 
             let action = stack.decide(&batch, &ctx);
 

@@ -1,14 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::engine::checkpoint::{Checkpoint, CheckpointStore};
-use crate::state::UserState;
+use crate::engine::checkpoint::{Checkpoint, CheckpointBackend, CheckpointView};
 
 #[derive(Clone, Default)]
-pub struct InMemoryCheckpointStore<S: UserState> {
-    pub saved: Arc<Mutex<Vec<Checkpoint<S>>>>,
+pub struct InMemoryCheckpointStore<SN, F> {
+    pub saved: Arc<Mutex<Vec<Checkpoint<SN, F>>>>,
 }
 
-impl<S: UserState> InMemoryCheckpointStore<S> {
+impl<SN, F> InMemoryCheckpointStore<SN, F> {
     pub fn new() -> Self {
         Self {
             saved: Arc::new(Mutex::new(Vec::new())),
@@ -20,22 +19,24 @@ impl<S: UserState> InMemoryCheckpointStore<S> {
     }
 }
 
-impl<S> CheckpointStore<S> for InMemoryCheckpointStore<S>
+impl<SN, F> CheckpointBackend<SN, F> for InMemoryCheckpointStore<SN, F>
 where
-    S: UserState + Send,
-    <S as UserState>::Float: Send,
+    SN: Clone + Send + Sync,
+    F: Clone + Send + Sync,
 {
     fn save(
         &self,
-        checkpoint: &Checkpoint<S>,
+        checkpoint: CheckpointView<'_, SN, F>,
     ) -> Result<(), crate::engine::checkpoint::CheckpointError> {
-        println!("Saving");
-        self.saved.lock().unwrap().push(checkpoint.clone());
-        println!("Saved");
+        dbg!("saving");
+        self.saved.lock().unwrap().push(Checkpoint::new(checkpoint));
+        dbg!("saved");
         Ok(())
     }
 
-    fn load(&self) -> Result<Option<Checkpoint<S>>, crate::engine::checkpoint::CheckpointError> {
-        Ok(None)
+    fn load(
+        &self,
+    ) -> Result<Option<Checkpoint<SN, F>>, crate::engine::checkpoint::CheckpointError> {
+        Ok(self.saved.lock().unwrap().last().cloned())
     }
 }

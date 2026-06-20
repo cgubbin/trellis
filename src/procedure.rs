@@ -27,9 +27,9 @@ pub trait Procedure {
     /// Initialisation.
     ///
     /// This step prepares the state object for the main procedure loop.
-    fn initialise(
-        &mut self,
-        _problem: &mut Problem<Self::Problem>,
+    fn initialise_user_state(
+        &self,
+        _problem: &Problem<Self::Problem>,
         state: &mut Self::State,
     ) -> Result<(), Self::Error> {
         Ok(())

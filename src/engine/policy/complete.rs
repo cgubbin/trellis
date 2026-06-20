@@ -72,10 +72,7 @@ mod test {
     fn completion_policy_does_not_terminate_when_not_complete() {
         let mut stack = PolicyStack::<f64>::new().add(CompletionPolicy);
 
-        let batch: EventBatch<f64> = EventBatch::new().add(Progress::ErrorEstimate {
-            absolute: 0.0,
-            relative: 0.0,
-        });
+        let batch: EventBatch<f64> = EventBatch::new().add(Progress::Measure(0.0));
         let ctx = EngineContext {
             iter: 11,
             ..Default::default()

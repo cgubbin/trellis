@@ -1,6 +1,9 @@
 use crate::{
-    state::{State, UserState},
-    TrellisFloat,
+    engine::{extensions::EngineSink, EngineSignal},
+    state::{
+        ConvergenceState, RuntimeState, Snapshotable, State, StateRestorer, StateView, UserState,
+    },
+    Procedure, TrellisFloat,
 };
 
 use serde::{Deserialize, Serialize};
@@ -20,59 +23,117 @@ pub enum CheckpointError {
     SerdeJson(#[from] serde_json::Error),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Checkpoint<S>
+pub struct CheckpointExtension<C> {
+    store: C,
+}
+
+impl<C> CheckpointExtension<C> {
+    pub(crate) fn new(store: C) -> Self {
+        Self { store }
+    }
+}
+
+impl<S, C> EngineSink<S> for CheckpointExtension<C>
 where
-    S: UserState,
-    <S as UserState>::Float: TrellisFloat,
+    S: UserState + Snapshotable,
+    C: CheckpointBackend<<S as Snapshotable>::Snapshot, <S as UserState>::Float> + 'static,
 {
+    fn handle(&mut self, state: StateView<'_, S>, signal: &EngineSignal<<S as UserState>::Float>) {
+        match signal {
+            EngineSignal::CheckpointRequested(_) => {
+                let checkpoint = CheckpointView::from(state);
+
+                if let Err(e) = self.store.save(checkpoint) {
+                    eprintln!("error saving checkpoint: {e:?}");
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckpointView<'a, SN, F> {
+    user: SN,
+    runtime: &'a RuntimeState,
+    convergence: &'a ConvergenceState<F>,
     version: u32,
-    state: State<S>,
     timestamp: SystemTime,
 }
 
-impl<S> Checkpoint<S>
+impl<'a, S> From<StateView<'a, S>> for CheckpointView<'a, S::Snapshot, <S as UserState>::Float>
 where
-    S: UserState,
-    <S as UserState>::Float: TrellisFloat,
+    S: Snapshotable + UserState,
 {
-    pub fn new(state: &State<S>) -> Self {
+    fn from(state: StateView<'a, S>) -> CheckpointView<'a, S::Snapshot, <S as UserState>::Float> {
         Self {
+            user: state.user().snapshot(),
+            runtime: state.runtime(),
+            convergence: state.convergence(),
             version: 1,
-            state: state.clone(),
             timestamp: SystemTime::now(),
         }
     }
+}
 
-    pub fn into_state(self) -> State<S> {
-        self.state
-    }
+#[derive(Clone, Debug, Deserialize)]
+pub struct Checkpoint<SN, F> {
+    user: SN,
+    runtime: RuntimeState,
+    convergence: ConvergenceState<F>,
+    version: u32,
+    timestamp: SystemTime,
+}
 
-    pub fn state(&self) -> &State<S> {
-        &self.state
+impl<SN, F> Checkpoint<SN, F> {
+    pub fn new(view: CheckpointView<'_, SN, F>) -> Self
+    where
+        F: Clone,
+    {
+        Self {
+            user: view.user,
+            runtime: view.runtime.clone(),
+            convergence: view.convergence.clone(),
+            version: view.version,
+            timestamp: view.timestamp,
+        }
     }
 }
 
-pub trait CheckpointStore<S>: Send + Sync
-where
-    S: UserState,
-{
-    fn save(&self, checkpoint: &Checkpoint<S>) -> Result<(), CheckpointError>;
-
-    fn load(&self) -> Result<Option<Checkpoint<S>>, CheckpointError>;
+impl<SN, F> Checkpoint<SN, F> {
+    pub fn into_state<S>(self) -> State<S>
+    where
+        S: StateRestorer<S> + Snapshotable<Snapshot = SN> + UserState<Float = F>,
+    {
+        State {
+            user: S::restore(self.user),
+            runtime: self.runtime,
+            convergence: self.convergence,
+        }
+    }
 }
 
-pub struct NoCheckpoint;
+pub trait CheckpointBackend<SN, F>: Send + Sync {
+    fn save(&self, checkpoint: CheckpointView<'_, SN, F>) -> Result<(), CheckpointError>;
 
-impl<S> CheckpointStore<S> for NoCheckpoint
+    fn load(&self) -> Result<Option<Checkpoint<SN, F>>, CheckpointError>;
+}
+
+pub trait EngineInitializer<S>
 where
     S: UserState,
 {
-    fn save(&self, _: &Checkpoint<S>) -> Result<(), CheckpointError> {
-        Ok(())
-    }
+    fn try_load(&self) -> Result<Option<State<S>>, CheckpointError>;
+}
 
-    fn load(&self) -> Result<Option<Checkpoint<S>>, CheckpointError> {
-        Ok(None)
+impl<S, C> EngineInitializer<S> for C
+where
+    S: UserState + Snapshotable + StateRestorer<S>,
+    C: CheckpointBackend<<S as Snapshotable>::Snapshot, <S as UserState>::Float>,
+{
+    fn try_load(&self) -> Result<Option<State<S>>, CheckpointError> {
+        let maybe_checkpoint = self.load()?;
+
+        Ok(maybe_checkpoint.map(|checkpoint| checkpoint.into_state()))
     }
 }

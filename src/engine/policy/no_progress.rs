@@ -7,8 +7,7 @@
 //!
 //! ## Behaviour
 //!
-//! - Extracts numeric values from `Progress::Metric` or
-//!   `Progress::ErrorEstimate`.
+//! - Extracts numeric values from `Progress::Measure`
 //! - Computes absolute improvement:
 //!   `|current - previous|`
 //! - If improvement < `tolerance`, increments stagnation counter.
@@ -63,8 +62,7 @@ where
 
         for e in &batch.events {
             let value = match e {
-                Progress::Metric { value } => *value,
-                Progress::ErrorEstimate { absolute, .. } => *absolute,
+                Progress::Measure(value) => *value,
                 _ => continue,
             };
 
@@ -104,7 +102,7 @@ mod test {
     use crate::progress::Progress;
 
     fn batch(v: f64) -> EventBatch<f64> {
-        EventBatch::new().add(Progress::Metric { value: v })
+        EventBatch::new().add(Progress::Measure(v))
     }
 
     #[test]
@@ -112,21 +110,21 @@ mod test {
         let mut stack = PolicyStack::<f64>::new().add(NoProgressPolicy::new(0.1, 3));
 
         // first: establish baseline
-        let batch1 = EventBatch::new().add(Progress::Metric { value: 10.0 });
+        let batch1 = EventBatch::new().add(Progress::Measure(10.0));
 
         let ctx = EngineContext::default();
         let _ = stack.decide(&batch1, &ctx);
 
         // repeated poor improvement
         for _ in 0..2 {
-            let batch = EventBatch::new().add(Progress::Metric { value: 9.95 }); // small improvement
+            let batch = EventBatch::new().add(Progress::Measure(9.95)); // small improvement
 
             let res = stack.decide(&batch, &ctx);
             assert!(matches!(res, crate::engine::EngineAction::Continue));
         }
 
         // real improvement resets
-        let reset_batch = EventBatch::new().add(Progress::Metric { value: 8.0 });
+        let reset_batch = EventBatch::new().add(Progress::Measure(8.0));
 
         let res = stack.decide(&reset_batch, &ctx);
         assert!(matches!(res, crate::engine::EngineAction::Continue));

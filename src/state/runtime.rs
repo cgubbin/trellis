@@ -1,63 +1,62 @@
-use crate::Termination;
-
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+/// Runtime bookkeeping for a single engine execution.
+///
+/// This type is intentionally minimal and **contains no semantic control logic**
+/// (no termination, no policy decisions, no convergence state).
+///
+/// It only tracks:
+/// - iteration count
+/// - wall-clock duration
+///
+/// These values are purely observational and are used by:
+/// - policies (via `EngineContext`)
+/// - diagnostics / summaries
+/// - observers / logging
+/// - checkpoint metadata
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RuntimeState {
     iter: usize,
-    max_iter: usize,
-    time: Option<Duration>,
-    termination: Option<Termination>,
+    time: Duration,
 }
 
 impl RuntimeState {
+    /// Creates a fresh runtime state at iteration 0 and zero duration.
     pub(crate) fn new() -> Self {
         Self {
             iter: 0,
-            max_iter: usize::MAX,
-            time: None,
-            termination: None,
+            time: Duration::new(0, 0),
         }
     }
 
+    /// Returns the current iteration index.
+    ///
+    /// This is incremented once per engine step.
     pub fn iteration(&self) -> usize {
         self.iter
     }
 
+    /// Increments the iteration counter by one.
+    ///
+    /// This should only be called by the engine loop.
     pub fn increment_iteration(&mut self) {
         self.iter += 1;
     }
 
-    pub fn max_iterations(&self) -> usize {
-        self.max_iter
+    /// Returns the total elapsed execution time recorded by the engine.
+    ///
+    /// Note: this value is *assigned* via `record_duration`, not automatically
+    /// computed, to allow flexibility in timing strategies (monotonic clock,
+    /// external time source, deterministic replay, etc.).
+    pub fn duration(&self) -> Duration {
+        self.time
     }
 
-    pub fn set_max_iterations(&mut self, max_iter: usize) {
-        self.max_iter = max_iter;
-    }
-
-    pub fn duration(&self) -> Option<&Duration> {
-        self.time.as_ref()
-    }
-
+    /// Updates the recorded execution duration.
+    ///
+    /// Typically set once per iteration in the engine loop.
     pub fn record_duration(&mut self, duration: Duration) {
-        self.time = Some(duration);
-    }
-
-    pub fn termination(&self) -> Option<Termination> {
-        self.termination
-    }
-
-    pub fn terminate(&mut self, termination: Termination) {
-        self.termination = Some(termination);
-    }
-
-    pub fn is_terminated(&self) -> bool {
-        self.termination.is_some()
-    }
-
-    pub fn exceeded_max_iterations(&self) -> bool {
-        self.iter > self.max_iter
+        self.time = duration;
     }
 }
