@@ -20,7 +20,9 @@ preflight:
     git diff --cached --quiet || (echo "Staged changes exist" && exit 1)
 
     just flake-check
-    cargo check
+    just check
+    just test
+    just lint
     cargo build --release
     cargo publish --dry-run
 
