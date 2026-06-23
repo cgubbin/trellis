@@ -96,17 +96,17 @@ use crate::{
     },
     state::{Snapshotable, State, StateRestorer},
     watchers::{Frequency, Observe, Observers},
-    FallibleProcedure, UserState,
+    FallibleProcedure, Infallible, Procedure, UserState,
 };
 
-pub trait GenerateBuilder: Sized {
+pub trait GenerateBuilderFallible: Sized {
     fn build_for<P>(self, problem: P) -> Builder<Self, P, Uninitialised>
     where
         Self: FallibleProcedure<P>,
         Self::State: UserState;
 }
 
-impl<Proc> GenerateBuilder for Proc {
+impl<Proc> GenerateBuilderFallible for Proc {
     fn build_for<P>(self, problem: P) -> Builder<Self, P, Uninitialised>
     where
         Proc: FallibleProcedure<P>,
@@ -114,6 +114,39 @@ impl<Proc> GenerateBuilder for Proc {
     {
         Builder {
             procedure: self,
+            problem,
+            state: None,
+            time: true,
+            cancellation_token: None,
+
+            observers: Observers::new(),
+
+            policies: PolicyStack::new()
+                .add(CancellationPolicy)
+                .add(CompletionPolicy),
+
+            extensions: Extensions::new(),
+
+            _initialised: std::marker::PhantomData,
+        }
+    }
+}
+
+pub trait GenerateBuilder: Sized {
+    fn build_for<P>(self, problem: P) -> Builder<Infallible<Self>, P, Uninitialised>
+    where
+        Self: Procedure<P>,
+        Self::State: UserState;
+}
+
+impl<Proc> GenerateBuilder for Proc {
+    fn build_for<P>(self, problem: P) -> Builder<Infallible<Self>, P, Uninitialised>
+    where
+        Proc: Procedure<P>,
+        Proc::State: UserState,
+    {
+        Builder {
+            procedure: Infallible(self),
             problem,
             state: None,
             time: true,

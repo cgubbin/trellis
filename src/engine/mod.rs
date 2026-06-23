@@ -74,7 +74,7 @@ pub use policy::{
     RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, TimeoutPolicy,
 };
 
-pub use builder::GenerateBuilder;
+pub use builder::{GenerateBuilder, GenerateBuilderFallible};
 pub use cancellation::CancellationGuard;
 use context::EngineContext;
 pub(crate) use event::{EngineAction, EngineSignal, EventBatch};

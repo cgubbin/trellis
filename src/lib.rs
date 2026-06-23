@@ -109,12 +109,14 @@ mod watchers;
 
 mod state;
 
+pub(crate) use procedure::Infallible;
+
 pub use procedure::{FallibleProcedure, Procedure};
 
 pub use engine::{
     AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, GenerateBuilder,
-    InMemoryCheckpointStore, MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy,
-    StagnationPolicy, TargetValuePolicy, Termination, TimeoutPolicy,
+    GenerateBuilderFallible, InMemoryCheckpointStore, MaxIterationPolicy, NoProgressPolicy,
+    RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, Termination, TimeoutPolicy,
 };
 
 #[cfg(feature = "writing")]

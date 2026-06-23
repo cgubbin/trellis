@@ -1,5 +1,7 @@
 use crate::CancellationGuard;
 
+use std::ops::Deref;
+
 /// Trait implemented by all problems solveable by `Trellis`
 ///
 /// A procedure defines the core loop of the solver. Typically we would write a for loop,
@@ -64,7 +66,16 @@ pub trait FallibleProcedure<P> {
     ) -> Result<Self::Output, Self::Error>;
 }
 
-impl<Proc, P> FallibleProcedure<P> for Proc
+pub struct Infallible<Proc>(pub Proc);
+
+impl<Proc> Deref for Infallible<Proc> {
+    type Target = Proc;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<Proc, P> FallibleProcedure<P> for Infallible<Proc>
 where
     Proc: Procedure<P>,
 {
