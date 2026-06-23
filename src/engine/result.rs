@@ -11,16 +11,14 @@ use crate::TrellisFloat;
 /// The separation is intentional:
 /// - `EngineSuccess` = controlled, expected termination
 /// - `EngineFailure` = unexpected error during execution
-pub type EngineResult<O, S, E> = Result<EngineOutput<O, S>, EngineFailure<E, S>>;
+pub type EngineResult<O, S> = Result<EngineOutput<O, S>, EngineFailure<S>>;
 
-pub(super) type InternalEngineResult<O, S, E> =
-    Result<(EngineOutput<O, S>, State<S>), EngineFailure<E, S>>;
+pub(super) type InternalEngineResult<O, S> = Result<EngineOutput<O, S>, InternalEngineFailure>;
 
-pub type EngineResultWithSnapshot<O, S, E> =
-    Result<EngineOutputWithSnapshot<O, S>, EngineFailure<E, S>>;
+pub type EngineResultWithSnapshot<O, S> = Result<EngineOutputWithSnapshot<O, S>, EngineFailure<S>>;
 
 #[derive(thiserror::Error, Debug)]
-pub enum EngineFailure<E, S>
+pub enum EngineFailure<S>
 where
     S: UserState,
     <S as UserState>::Float: TrellisFloat,
@@ -35,9 +33,33 @@ where
     /// and can be used for debugging or checkpoint recovery.
     Procedure {
         /// The underlying procedure error.
-        error: E,
+        error: Box<dyn std::error::Error + Send + Sync>,
 
         /// Snapshot of the solver state at the time of failure.
         state: State<S>,
     },
+}
+
+impl<S> EngineFailure<S>
+where
+    S: UserState,
+    <S as UserState>::Float: TrellisFloat,
+{
+    pub(super) fn from_internal(internal: InternalEngineFailure, state: State<S>) -> Self {
+        EngineFailure::Procedure {
+            error: internal.0,
+            state,
+        }
+    }
+}
+
+pub(super) struct InternalEngineFailure(Box<dyn std::error::Error + Send + Sync>);
+
+impl InternalEngineFailure {
+    pub(super) fn new<E>(error: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self(Box::new(error))
+    }
 }

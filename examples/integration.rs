@@ -1,24 +1,22 @@
 use trellis_runner::{
-    CancellationGuard, GenerateBuilder, MaxIterationPolicy, Problem, Procedure, Progress,
-    StagnationPolicy, UserState,
+    CancellationGuard, GenerateBuilder, MaxIterationPolicy, Procedure, Progress, StagnationPolicy,
+    UserState,
 };
 
+#[derive(Clone)]
+pub struct QuadratureProblem {
+    pub a: f64,
+    pub b: f64,
+    pub f: fn(f64) -> f64,
+}
+
 #[derive(Default, Clone, Debug)]
-pub struct IntegrationState {
+pub struct TrapezoidalState {
     n: usize,
     estimate: f64,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub struct IntegrationError;
-
-impl std::fmt::Display for IntegrationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "integration error")
-    }
-}
-
-impl UserState for IntegrationState {
+impl UserState for TrapezoidalState {
     type Float = f64;
 
     fn progress(&self) -> Progress<Self::Float> {
@@ -29,59 +27,52 @@ impl UserState for IntegrationState {
 /// Integrate f(x) = x^2 over [0, 1] using trapezoidal refinement
 pub struct TrapezoidalIntegration;
 
-impl Procedure for TrapezoidalIntegration {
-    type State = IntegrationState;
-    type Problem = ();
+impl Procedure<QuadratureProblem> for TrapezoidalIntegration {
+    type State = TrapezoidalState;
 
     type Output = f64;
-    type Error = IntegrationError;
 
     const NAME: &'static str = "Trapezoidal Integrator";
 
     fn step(
-        &mut self,
-        _: &mut Problem<Self::Problem>,
+        &self,
+        problem: &mut QuadratureProblem,
         state: &mut Self::State,
         _guard: CancellationGuard<'_>,
-    ) -> Result<(), Self::Error> {
+    ) {
         state.n += 1;
 
-        let n = state.n;
-        let h = 1.0 / n as f64;
+        let h = (problem.b - problem.a) / state.n as f64;
 
         let mut sum = 0.0;
-        for i in 0..n {
-            let x0 = i as f64 * h;
-            let x1 = (i + 1) as f64 * h;
 
-            let f0 = x0 * x0;
-            let f1 = x1 * x1;
+        for i in 0..state.n {
+            let x0 = problem.a + i as f64 * h;
+            let x1 = problem.a + (i + 1) as f64 * h;
+
+            let f0 = (problem.f)(x0);
+            let f1 = (problem.f)(x1);
 
             sum += 0.5 * (f0 + f1) * h;
         }
 
         state.estimate = sum;
-
-        Ok(())
     }
 
-    fn is_finished(&self, state: &Self::State) -> bool {
-        false
-    }
-
-    fn finalise(
-        &mut self,
-        _: &mut Problem<Self::Problem>,
-        state: &Self::State,
-    ) -> Result<Self::Output, IntegrationError> {
-        Ok(state.estimate)
+    fn finalise(&self, _: &mut QuadratureProblem, state: &Self::State) -> Self::Output {
+        state.estimate
     }
 }
 
 fn main() {
+    let problem = QuadratureProblem {
+        a: 0.0,
+        b: 1.0,
+        f: |x| x * x,
+    };
     let result = TrapezoidalIntegration
-        .build_for(())
-        .with_initial_state(IntegrationState::default())
+        .build_for(problem)
+        .with_initial_state(TrapezoidalState::default())
         .and_policy(MaxIterationPolicy::new(3000))
         .and_policy(StagnationPolicy::new(10))
         .finalise()

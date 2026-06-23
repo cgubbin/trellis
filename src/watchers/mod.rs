@@ -5,15 +5,24 @@ use crate::state::{StateView, UserState};
 
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "writing")]
 mod csv_file;
+
 mod failure;
 mod metrics;
+
+#[cfg(feature = "plotting")]
 mod plot;
+
 mod sampler;
 mod tracing;
 
+#[cfg(feature = "writing")]
 pub use csv_file::CsvProgressWriter;
+
+#[cfg(feature = "plotting")]
 pub use plot::PlotObserver;
+
 pub use tracing::Tracer;
 
 /// Core observer trait for the engine event system.

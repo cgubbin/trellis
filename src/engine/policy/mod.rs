@@ -128,37 +128,42 @@ impl<F> EnginePolicy<F> for PolicyStack<F> {
 }
 
 impl<F> PolicyStack<F> {
-    pub fn standard(max_iter: usize, atol: F) -> PolicyStack<F>
+    pub fn standard(max_iter: usize, atol: F, window_size: usize) -> PolicyStack<F>
     where
         F: FloatCore + 'static,
     {
         PolicyStack::new()
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
-            .add(AbsoluteTolerancePolicy::new(atol))
+            .add(AbsoluteTolerancePolicy::new(atol, window_size))
     }
 
-    pub fn optimisation(max_iter: usize, atol: F, stagnation: usize) -> PolicyStack<F>
+    pub fn optimisation(max_iter: usize, atol: F, window_size: usize) -> PolicyStack<F>
     where
         F: FloatCore + 'static + num_traits::FromPrimitive + std::iter::Sum<F>,
     {
         PolicyStack::new()
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
-            .add(AbsoluteTolerancePolicy::new(atol))
-            .add(StagnationPolicy::new(stagnation))
+            .add(AbsoluteTolerancePolicy::new(atol, window_size))
+            .add(StagnationPolicy::new(window_size))
     }
 
-    pub fn global_optimisation(max_iter: usize, target: F, stagnation: usize) -> PolicyStack<F>
+    pub fn global_optimisation(
+        max_iter: usize,
+        target: F,
+        tol: F,
+        window_size: usize,
+    ) -> PolicyStack<F>
     where
         F: FloatCore + 'static + num_traits::FromPrimitive + std::iter::Sum<F>,
     {
         PolicyStack::new()
             .add(CancellationPolicy)
             .add(MaxIterationPolicy::new(max_iter))
-            .add(TargetValuePolicy::new(target))
-            .add(StagnationPolicy::new(stagnation))
-            .add(NoProgressPolicy::new(F::epsilon(), 50))
+            .add(TargetValuePolicy::new(target, tol, window_size))
+            .add(StagnationPolicy::new(window_size))
+            .add(NoProgressPolicy::new(F::epsilon(), window_size))
     }
 
     pub fn monte_carlo(max_iter: usize) -> PolicyStack<F>
@@ -264,6 +269,10 @@ mod tests {
                 ..Default::default()
             },
         });
+
+        for _ in 0..10 {
+            stack.decide(&batch, &ctx);
+        }
 
         let action = stack.decide(&batch, &ctx);
 

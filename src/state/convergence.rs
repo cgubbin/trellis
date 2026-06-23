@@ -19,7 +19,6 @@
 use crate::progress::Progress;
 
 use num_traits::float::FloatCore;
-use serde::{Deserialize, Serialize};
 
 fn is_improvement<F: FloatCore>(value: F, best: F) -> bool {
     value < best
@@ -28,7 +27,8 @@ fn is_improvement<F: FloatCore>(value: F, best: F) -> bool {
             && value.is_sign_positive() == best.is_sign_positive())
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MeasureHistory<F> {
     current: F,
     previous: F,
@@ -76,7 +76,8 @@ impl<F: FloatCore> MeasureHistory<F> {
 /// Both error estimates and optimisation measures may be recorded.
 /// The stored values can be queried by policies, observers, and
 /// output summaries.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConvergenceState<F> {
     measure: MeasureHistory<F>,
     last_best_iteration: usize,

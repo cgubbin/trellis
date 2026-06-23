@@ -5,13 +5,16 @@ use crate::{
     },
 };
 
-use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 mod in_memory;
+
+#[cfg(feature = "writing")]
 mod json;
 
 pub use in_memory::InMemoryCheckpointStore;
+
+#[cfg(feature = "writing")]
 pub use json::JsonCheckpointStore;
 
 #[derive(Debug, thiserror::Error)]
@@ -19,7 +22,7 @@ pub enum CheckpointError {
     #[error("filesystem error: {0}")]
     FileSystem(#[from] std::io::Error),
     #[error("serde json error: {0}")]
-    SerdeJson(#[from] serde_json::Error),
+    SerdeJson(Box<dyn std::error::Error + 'static>),
 }
 
 pub struct CheckpointExtension<C> {
@@ -48,7 +51,8 @@ where
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct CheckpointView<'a, SN, F> {
     user: SN,
     runtime: &'a RuntimeState,
@@ -72,7 +76,8 @@ where
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Checkpoint<SN, F> {
     user: SN,
     runtime: RuntimeState,

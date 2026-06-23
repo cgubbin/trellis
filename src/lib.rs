@@ -5,101 +5,120 @@
 //! It provides a structured execution environment for algorithms that evolve a state over time,
 //! producing progress signals, convergence diagnostics, and termination conditions.
 //!
-//! ## Core concepts
+//! # Policies
 //!
-//! ### Procedure
-//! A [`Procedure`] defines the numerical algorithm being executed.
-//! It operates over a user-defined [`UserState`] and emits [`Progress`] updates.
+//! Policies control solver execution.
 //!
-//! ### Engine
-//! The engine drives execution of a procedure, managing:
-//! - iteration lifecycle
-//! - runtime tracking
-//! - convergence tracking
-//! - cancellation
-//! - observer dispatch
+//! During a run, the engine collects progress information from the procedure and
+//! passes it to one or more policies. Policies inspect this information and
+//! decide whether the solver should:
 //!
-//! ### State model
-//! Each run maintains a [`State`] consisting of:
-//! - user-defined state (`UserState`)
-//! - runtime metadata (iterations, timing)
-//! - convergence tracking (best/current metrics)
+//! - continue running,
+//! - terminate successfully,
+//! - terminate early,
+//! - or request some other engine action.
 //!
-//! ### Observers
-//! Observers subscribe to engine events via [`watchers::Observe`] and receive:
-//! - progress updates
-//! - lifecycle events
-//! - termination signals
+//! Policies are the primary mechanism used to implement convergence criteria,
+//! iteration limits, stagnation detection and timeout handling.
 //!
-//! Observers are used for:
-//! - logging and tracing
-//! - CSV export
-//! - plotting
-//! - metrics aggregation
+//! ## Policies vs Observers
 //!
-//! ### Output model
-//! A run produces an [`EngineOutput`] containing:
-//! - the user result
-//! - termination reason
-//! - runtime summary
-//! - optional snapshot (if enabled)
+//! Policies influence solver behaviour.
 //!
-//! ## Design philosophy
+//! Observers only observe solver behaviour.
 //!
-//! Trellis is built around four principles:
+//! A policy may terminate a calculation. An observer may not.
 //!
-//! ### 1. Separation of concerns
-//! - procedure logic is independent of execution
-//! - observers are independent of engine logic
-//!
-//! ### 2. Streaming execution
-//! The engine emits incremental [`EngineSignal`] events during execution.
-//!
-//! ### 3. Explicit state evolution
-//! State is not hidden; it is tracked explicitly via [`State`] and [`StateView`].
-//!
-//! ### 4. Optional capabilities
-//! Features like snapshotting are opt-in via traits rather than enforced globally.
-//!
-//! ## Floating-point abstraction
-//!
-//! All numeric computation is abstracted over [`TrellisFloat`], supporting `f32` and `f64`
-//! with extensibility for custom numeric types.
-//!
-//! ## Example
-//!
-//! ```ignore
-//! let result = MyProcedure::new()
-//!     .build_for(problem)
-//!     .time(true)
-//!     .finalise()
-//!     .run();
+//! ```text
+//! Progress ──► Policy ──► Engine Action
+//!            │
+//!            └────► Observer
 //! ```
+//!
+//! ## Attaching Policies
+//!
+//! Policies are attached through the builder.
+//!
+//! ```rust
+//! use trellis_runner::{CancellationGuard, MaxIterationPolicy, StagnationPolicy, GenerateBuilder};
+//!
+//! struct MyProcedure;
+//! struct MyProblem;
+//! struct MyState;
+//!
+//! impl trellis_runner::Procedure<MyProblem> for MyProcedure {
+//!     const NAME: &'static str = "My Procedure";
+//!     type State = MyState;
+//!     type Output = ();
+//!
+//!     fn step(
+//!         &self,
+//!         _: &mut MyProblem,
+//!         _: &mut Self::State,
+//!         _guard: CancellationGuard<'_>,
+//!     ) {
+//!         ()
+//!     }
+//!
+//!     fn finalise(&self, _: &mut MyProblem, _: &Self::State) {}
+//! }
+//!
+//!
+//! impl trellis_runner::UserState for MyState {
+//!     type Float = f64;
+//!
+//!     fn progress(&self) -> trellis_runner::Progress<f64> {
+//!         trellis_runner::Progress::Complete
+//!     }
+//! }
+//!
+//! let engine = MyProcedure
+//!     .build_for(MyProblem)
+//!     .with_initial_state(MyState)
+//!     .and_policy(MaxIterationPolicy::new(10_000))
+//!     .and_policy(StagnationPolicy::new(10))
+//!     .finalise();
+//! ```
+//!
+//! Multiple policies may be attached.
+//!
+//! The engine stops as soon as any policy requests termination.
+//!
+//! ## Built-in Policies
+//!
+//! Trellis provides several commonly useful policies.
+//!
+//! | Policy | Purpose |
+//! |---------|----------|
+//! | `MaxIterationPolicy` | Stop the engine after a fixed number of iterations |
+//! | `TimeoutPolicy` | Stops the engine after a maximum wall-clock duration |
+//! | `AbsoluteTolerancePolicy` | Stops the engine when the mean absolute error over a rolling window falls below a user-defined tolerance|
+//! | `RelativeTolerancePolicy` | Stops the engine when the mean relative error over a rolling window falls below a user-defined tolerance|
+//! | `StagnationPolicy` | Stops the engine when the improvement of the best observed value over a rolling window falls below a relative tolerance threshold |
+//! | `NoProgressPolicy` | Stops the engine when the best observed objective value fails to improve by a relative tolerance for a specified number of consecutive iterations |
+//! | `TargetValuePolicy` | Stops the engine when the mean absolute distance to a target value remains below a specified tolerance over a rolling window |
+//! | `CheckpointPolicy` | Define frequency of checkpoint generation |
 #![allow(dead_code)]
 
 mod procedure;
 
 mod engine;
-mod problem;
 mod progress;
 mod result;
 mod watchers;
 
 mod state;
 
-pub use procedure::Procedure;
+pub use procedure::{FallibleProcedure, Procedure};
 
 pub use engine::{
-    CancellationGuard, GenerateBuilder, InMemoryCheckpointStore, JsonCheckpointStore, Termination,
+    AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, GenerateBuilder,
+    InMemoryCheckpointStore, MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy,
+    StagnationPolicy, TargetValuePolicy, Termination, TimeoutPolicy,
 };
 
-pub use engine::{
-    AbsoluteTolerancePolicy, CancellationPolicy, CheckpointPolicy, CompletionPolicy,
-    MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy,
-    TargetValuePolicy, TimeoutPolicy,
-};
-
-pub use problem::Problem;
+#[cfg(feature = "writing")]
+pub use engine::JsonCheckpointStore;
 
 pub use result::{EngineOutput, EngineOutputWithSnapshot, TrellisError};
 
@@ -107,16 +126,15 @@ pub use state::{Snapshotable, StateRestorer, UserState};
 
 pub use progress::{Progress, ProgressDiagnostics};
 
-pub use watchers::{CsvProgressWriter, Frequency, Observe, PlotObserver, Tracer};
+pub use watchers::{Frequency, Observe, Tracer};
 
-pub trait TrellisFloat:
-    std::fmt::Display
-    + std::fmt::Debug
-    + serde::Serialize
-    + serde::de::DeserializeOwned
-    + num_traits::float::FloatCore
-{
-}
+#[cfg(feature = "writing")]
+pub use watchers::CsvProgressWriter;
+
+#[cfg(feature = "plotting")]
+pub use watchers::PlotObserver;
+
+pub trait TrellisFloat: std::fmt::Display + std::fmt::Debug + num_traits::float::FloatCore {}
 
 impl TrellisFloat for f32 {}
 impl TrellisFloat for f64 {}

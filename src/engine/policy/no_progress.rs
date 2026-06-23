@@ -38,7 +38,7 @@ pub struct NoProgressPolicy<F> {
     tolerance: F,
     patience: usize,
 
-    last_value: Option<F>,
+    best_so_far: Option<F>,
     counter: usize,
 }
 
@@ -47,7 +47,7 @@ impl<F> NoProgressPolicy<F> {
         Self {
             tolerance,
             patience,
-            last_value: None,
+            best_so_far: None,
             counter: 0,
         }
     }
@@ -58,36 +58,49 @@ where
     F: FloatCore,
 {
     fn decide(&mut self, batch: &EventBatch<F>, _ctx: &EngineContext) -> EngineAction {
-        let mut best_in_batch: Option<F> = None;
+        let mut batch_best: Option<F> = None;
 
         for e in &batch.events {
             let value = match e {
-                Progress::Measure(value) => *value,
+                Progress::Measure(v) => *v,
+                Progress::Report { measure, .. } => *measure,
                 _ => continue,
             };
 
-            best_in_batch = Some(match best_in_batch {
+            batch_best = Some(match batch_best {
                 Some(v) => v.min(value),
                 None => value,
             });
         }
 
-        if let Some(current) = best_in_batch {
-            if let Some(prev) = self.last_value {
-                let improvement = (prev - current).abs();
+        let Some(batch_best) = batch_best else {
+            return EngineAction::Continue;
+        };
 
-                if improvement < self.tolerance {
-                    self.counter += 1;
-                } else {
-                    self.counter = 0;
-                }
+        match self.best_so_far {
+            None => {
+                self.best_so_far = Some(batch_best);
+                self.counter = 0;
+                return EngineAction::Continue;
             }
 
-            self.last_value = Some(current);
+            Some(prev_best) => {
+                let denom = prev_best.abs().max(F::one());
+                let improvement = (prev_best - batch_best) / denom;
+
+                if improvement > self.tolerance {
+                    // meaningful improvement → reset patience
+                    self.best_so_far = Some(batch_best);
+                    self.counter = 0;
+                } else {
+                    // no meaningful improvement
+                    self.counter += 1;
+                }
+            }
         }
 
         if self.counter >= self.patience {
-            return EngineAction::Stop(Termination::Stagnated);
+            return EngineAction::Stop(crate::Termination::NoProgress);
         }
 
         EngineAction::Continue

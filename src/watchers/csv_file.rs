@@ -80,7 +80,7 @@ impl<S: Send + Sync + 'static> CsvProgressWriter<S, BufWriter<File>> {
 impl<S, W> Observe<S> for CsvProgressWriter<S, W>
 where
     S: UserState + Send + Sync,
-    S::Float: Copy,
+    S::Float: Copy + Serialize,
     W: Write + Send,
 {
     fn observe(&self, _: &'static str, state: StateView<'_, S>, event: &EngineSignal<S::Float>) {

@@ -36,7 +36,8 @@ where
 
         let writer = BufWriter::new(file);
 
-        serde_json::to_writer_pretty(writer, &checkpoint)?;
+        serde_json::to_writer_pretty(writer, &checkpoint)
+            .map_err(|e| CheckpointError::SerdeJson(Box::new(e)))?;
 
         Ok(())
     }
@@ -50,7 +51,8 @@ where
 
         let reader = BufReader::new(file);
 
-        let checkpoint = serde_json::from_reader(reader)?;
+        let checkpoint =
+            serde_json::from_reader(reader).map_err(|e| CheckpointError::SerdeJson(Box::new(e)))?;
 
         Ok(Some(checkpoint))
     }

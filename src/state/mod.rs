@@ -41,7 +41,6 @@ pub(crate) use runtime::RuntimeState;
 pub(crate) use view::StateView;
 
 use num_traits::float::FloatCore;
-use serde::{Deserialize, Serialize};
 
 /// Internal execution state of the solver.
 ///
@@ -54,7 +53,15 @@ use serde::{Deserialize, Serialize};
 /// - `user`: user-defined state implementing [`UserState`]
 /// - `runtime`: execution metadata (iteration count, duration)
 /// - `convergence`: convergence tracking for policies
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "S: serde::Serialize, S::Float: serde::Serialize",
+        deserialize = "S: serde::Deserialize<'de>, S::Float: serde::Deserialize<'de>"
+    ))
+)]
 pub struct State<S: UserState> {
     pub(crate) runtime: RuntimeState,
 

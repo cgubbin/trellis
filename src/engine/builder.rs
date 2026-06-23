@@ -5,7 +5,7 @@
 //! The builder is responsible for assembling all runtime components required to execute a
 //! procedure:
 //!
-//! - numerical procedure (`Procedure`)
+//! - numerical procedure (`FallibleProcedure`)
 //! - initial solver state (`State`)
 //! - policy stack (`PolicyStack`)
 //! - observers (`Observe` implementations)
@@ -60,7 +60,7 @@
 //! ## Minimal usage
 //!
 //! ```ignore
-//! let engine = MyProcedure::new()
+//! let engine = MyFallibleProcedure::new()
 //!     .build_for(problem)
 //!     .finalise();
 //! ```
@@ -68,7 +68,7 @@
 //! ## Fully configured usage
 //!
 //! ```ignore
-//! let engine = MyProcedure::new()
+//! let engine = MyFallibleProcedure::new()
 //!     .build_for(problem)
 //!     .time(true)
 //!     .with_default_policies(max_iter, tol)
@@ -87,7 +87,7 @@ use num_traits::float::FloatCore;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
-use crate::engine::policy::{EnginePolicy, PolicyStack};
+use crate::engine::policy::{CancellationPolicy, CompletionPolicy, EnginePolicy, PolicyStack};
 use crate::{
     engine::{
         checkpoint::{CheckpointBackend, CheckpointExtension},
@@ -96,23 +96,22 @@ use crate::{
     },
     state::{Snapshotable, State, StateRestorer},
     watchers::{Frequency, Observe, Observers},
-    Procedure, UserState,
+    FallibleProcedure, UserState,
 };
 
-pub trait GenerateBuilder: Sized + Procedure
-where
-    Self::State: UserState,
-{
-    fn build_for(self, problem: Self::Problem) -> Builder<Self, Uninitialised>;
+pub trait GenerateBuilder: Sized {
+    fn build_for<P>(self, problem: P) -> Builder<Self, P, Uninitialised>
+    where
+        Self: FallibleProcedure<P>,
+        Self::State: UserState;
 }
 
-impl<P> GenerateBuilder for P
-where
-    P: Procedure,
-    P::State: UserState,
-    <P::State as UserState>::Float: FloatCore,
-{
-    fn build_for(self, problem: Self::Problem) -> Builder<Self, Uninitialised> {
+impl<Proc> GenerateBuilder for Proc {
+    fn build_for<P>(self, problem: P) -> Builder<Self, P, Uninitialised>
+    where
+        Proc: FallibleProcedure<P>,
+        Proc::State: UserState,
+    {
         Builder {
             procedure: self,
             problem,
@@ -122,7 +121,9 @@ where
 
             observers: Observers::new(),
 
-            policies: PolicyStack::new(),
+            policies: PolicyStack::new()
+                .add(CancellationPolicy)
+                .add(CompletionPolicy),
 
             extensions: Extensions::new(),
 
@@ -134,30 +135,31 @@ where
 pub struct Uninitialised;
 pub struct Initialised;
 
-pub struct Builder<P, I>
+pub struct Builder<Proc, P, I>
 where
-    P: Procedure,
-    P::State: UserState,
+    Proc: FallibleProcedure<P>,
+    Proc::State: UserState,
+    <Proc::State as UserState>::Float: FloatCore,
 {
-    procedure: P,
-    problem: P::Problem,
-    state: Option<P::State>,
+    procedure: Proc,
+    problem: P,
+    state: Option<Proc::State>,
     time: bool,
     cancellation_token: Option<CancellationToken>,
 
-    observers: Observers<P::State>,
+    observers: Observers<Proc::State>,
 
-    policies: PolicyStack<<P::State as UserState>::Float>,
-    extensions: Extensions<P::State>,
+    policies: PolicyStack<<Proc::State as UserState>::Float>,
+    extensions: Extensions<Proc::State>,
 
     _initialised: std::marker::PhantomData<I>,
 }
 
-impl<P, I> Builder<P, I>
+impl<Proc, P, I> Builder<Proc, P, I>
 where
-    P: Procedure,
-    P::State: UserState,
-    <P::State as UserState>::Float: FloatCore + 'static,
+    Proc: FallibleProcedure<P>,
+    Proc::State: UserState,
+    <Proc::State as UserState>::Float: FloatCore + 'static,
 {
     #[must_use]
     pub fn time(mut self, time: bool) -> Self {
@@ -169,7 +171,7 @@ where
     #[must_use]
     pub fn attach_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
     where
-        OBS: Observe<P::State> + 'static,
+        OBS: Observe<Proc::State> + 'static,
     {
         self.observers
             .attach(Arc::new(Mutex::new(observer)), frequency);
@@ -179,7 +181,7 @@ where
     #[must_use]
     pub fn and_policy<Q>(mut self, policy: Q) -> Self
     where
-        Q: EnginePolicy<<P::State as UserState>::Float> + 'static,
+        Q: EnginePolicy<<Proc::State as UserState>::Float> + 'static,
     {
         self.policies = self.policies.add(policy);
         self
@@ -198,11 +200,14 @@ where
     pub fn with_default_policies(
         mut self,
         max_iter: usize,
-        absolute_tolerance: <P::State as UserState>::Float,
+        absolute_tolerance: <Proc::State as UserState>::Float,
+        window_size: usize,
     ) -> Self {
-        self.policies = self
-            .policies
-            .merge(PolicyStack::standard(max_iter, absolute_tolerance));
+        self.policies = self.policies.merge(PolicyStack::standard(
+            max_iter,
+            absolute_tolerance,
+            window_size,
+        ));
         self
     }
 
@@ -214,24 +219,26 @@ where
     /// When enabled, checkpoints are emitted via the engine extension system.
     pub fn with_checkpoint_backend<C>(mut self, store: C) -> Self
     where
-        C: CheckpointBackend<<P::State as Snapshotable>::Snapshot, <P::State as UserState>::Float>
-            + 'static,
-        <P as Procedure>::State: Snapshotable,
+        C: CheckpointBackend<
+                <Proc::State as Snapshotable>::Snapshot,
+                <Proc::State as UserState>::Float,
+            > + 'static,
+        Proc::State: Snapshotable,
     {
         self.extensions = self.extensions.add(CheckpointExtension::new(store));
         self
     }
 }
 
-impl<P> Builder<P, Uninitialised>
+impl<Proc, P> Builder<Proc, P, Uninitialised>
 where
-    P: Procedure,
-    P::State: UserState,
-    <P::State as UserState>::Float: FloatCore + 'static,
+    Proc: FallibleProcedure<P>,
+    Proc::State: UserState,
+    <Proc::State as UserState>::Float: FloatCore + 'static,
 {
     // TODO: Possibly unneeded if a valid state is always constructed in the initialise method
     #[must_use]
-    pub fn with_initial_state(self, user: P::State) -> Builder<P, Initialised> {
+    pub fn with_initial_state(self, user: Proc::State) -> Builder<Proc, P, Initialised> {
         Builder {
             procedure: self.procedure,
             problem: self.problem,
@@ -252,13 +259,13 @@ where
     #[must_use]
     pub fn resume_from_checkpoint(
         self,
-        snapshot: <P::State as Snapshotable>::Snapshot,
-    ) -> Builder<P, Initialised>
+        snapshot: <Proc::State as Snapshotable>::Snapshot,
+    ) -> Builder<Proc, P, Initialised>
     where
-        P: Procedure,
-        P::State: Snapshotable + StateRestorer<P::State>,
+        Proc: FallibleProcedure<P>,
+        Proc::State: Snapshotable + StateRestorer<Proc::State>,
     {
-        let user = P::State::restore(snapshot);
+        let user = Proc::State::restore(snapshot);
 
         Builder {
             procedure: self.procedure,
@@ -278,19 +285,19 @@ where
     }
 }
 
-impl<P> Builder<P, Initialised>
+impl<Proc, P> Builder<Proc, P, Initialised>
 where
-    P: Procedure,
-    P::State: UserState,
-    <P::State as UserState>::Float: FloatCore + 'static,
+    Proc: FallibleProcedure<P>,
+    Proc::State: UserState,
+    <Proc::State as UserState>::Float: FloatCore + 'static,
 {
     /// Finalises the builder using the currently configured policy stack.
     ///
     /// If no policies were added, the engine will run with an empty policy stack
     /// (i.e. no termination conditions beyond external cancellation).efault policy
-    pub fn finalise(mut self) -> Engine<P, PolicyStack<<P::State as UserState>::Float>>
+    pub fn finalise(mut self) -> Engine<Proc, P, PolicyStack<<Proc::State as UserState>::Float>>
     where
-        <P::State as UserState>::Float: num_traits::FromPrimitive,
+        <Proc::State as UserState>::Float: num_traits::FromPrimitive,
     {
         let user = self.state.take().expect("builder invariant: user is set");
 
@@ -300,15 +307,15 @@ where
         {
             let token = cancellation.clone();
             ctrlc::set_handler(move || {
-                t.cancel();
+                token.cancel();
             })
             .unwrap();
         }
 
         Engine {
             procedure: self.procedure,
-            problem: crate::Problem::new(self.problem),
-            state: Some(State::new(user)),
+            problem: self.problem,
+            state: State::new(user),
 
             time: self.time,
             start_time: None,
@@ -331,8 +338,8 @@ where
     /// - state configuration
     pub fn finalise_with(
         mut self,
-        policy: PolicyStack<<P::State as UserState>::Float>,
-    ) -> Engine<P, PolicyStack<<P::State as UserState>::Float>> {
+        policy: PolicyStack<<Proc::State as UserState>::Float>,
+    ) -> Engine<Proc, P, PolicyStack<<Proc::State as UserState>::Float>> {
         let user = self.state.take().expect("builder invariant: user is set");
         let cancellation = self.cancellation_token.unwrap_or_default();
 
@@ -340,15 +347,15 @@ where
         {
             let token = cancellation.clone();
             ctrlc::set_handler(move || {
-                t.cancel();
+                token.cancel();
             })
             .unwrap();
         }
 
         Engine {
             procedure: self.procedure,
-            problem: crate::Problem::new(self.problem),
-            state: Some(State::new(user)),
+            problem: self.problem,
+            state: State::new(user),
 
             time: self.time,
             start_time: None,
@@ -364,7 +371,7 @@ where
 }
 //     pub fn with_checkpoint_resumed(mut self) -> Result<Self, CheckpointError>
 //     where
-//         C: CheckpointBackend<P::State>,
+//         C: CheckpointBackend<Proc::State>,
 //     {
 //         if let Some(store) = &self.checkpoint_store {
 //             if let Some(checkpoint) = store.load()? {

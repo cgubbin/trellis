@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Runtime bookkeeping for a single engine execution.
@@ -15,7 +14,8 @@ use std::time::Duration;
 /// - diagnostics / summaries
 /// - observers / logging
 /// - checkpoint metadata
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RuntimeState {
     iter: usize,
     time: Duration,

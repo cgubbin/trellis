@@ -16,8 +16,6 @@
 //! Module for abstractions about the state of a solver, and reasons why a solver may have
 //! terminated.
 
-use serde::{Deserialize, Serialize};
-
 /// Canonical reasons why a solver terminated.
 ///
 /// This type is produced by the engine policy layer and recorded in the final
@@ -25,7 +23,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// It is deliberately coarse-grained: it describes *why execution stopped*,
 /// not how the engine reached that decision.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Termination {
     /// Execution was cancelled externally (e.g. user request or cancellation token).
     ///
@@ -47,6 +46,8 @@ pub enum Termination {
     ///
     /// Typically triggered by stagnation or no-progress policies.
     Stagnated,
+
+    NoProgress,
 
     /// The solver exceeded a wall-clock time limit.
     ///

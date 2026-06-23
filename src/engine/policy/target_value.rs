@@ -27,11 +27,19 @@ use num_traits::float::FloatCore;
 
 pub struct TargetValuePolicy<F> {
     target: F,
+    tolerance: F,
+    window: Vec<F>,
+    window_size: usize,
 }
 
-impl<F> TargetValuePolicy<F> {
-    pub fn new(target: F) -> Self {
-        Self { target }
+impl<F: FloatCore> TargetValuePolicy<F> {
+    pub fn new(target: F, tolerance: F, window_size: usize) -> Self {
+        Self {
+            target,
+            tolerance,
+            window: Vec::with_capacity(window_size),
+            window_size,
+        }
     }
 }
 
@@ -40,14 +48,36 @@ where
     F: FloatCore,
 {
     fn decide(&mut self, batch: &EventBatch<F>, _context: &EngineContext) -> EngineAction {
-        for each in &batch.events {
-            match each {
-                Progress::Measure(value) if *value <= self.target => {
-                    return EngineAction::Stop(Termination::Converged);
-                }
-                _ => {}
+        for event in &batch.events {
+            let value = match event {
+                Progress::Measure(v) => *v,
+                Progress::Report { measure, .. } => *measure,
+                _ => continue,
+            };
+
+            // symmetric distance to target
+            let dist = (value - self.target).abs();
+
+            self.window.push(dist);
+
+            if self.window.len() > self.window_size {
+                self.window.remove(0);
             }
         }
+
+        if self.window.len() < self.window_size {
+            return EngineAction::Continue;
+        }
+
+        // mean absolute distance
+        let mean = self.window.iter().copied().fold(F::zero(), |a, b| a + b)
+            / F::from(self.window.len()).unwrap();
+
+        // tolerance-based stopping condition
+        if mean < self.tolerance {
+            return EngineAction::Stop(crate::Termination::Converged);
+        }
+
         EngineAction::Continue
     }
 }
@@ -65,18 +95,22 @@ mod test {
 
     #[test]
     fn target_reached_stops() {
-        let mut p = TargetValuePolicy::new(1.0);
+        let mut p = TargetValuePolicy::new(1.0, 0.01, 5);
 
         let ctx = EngineContext::default();
 
-        let res = p.decide(&batch(0.5), &ctx);
+        for _ in 0..5 {
+            p.decide(&batch(1.0), &ctx);
+        }
+
+        let res = p.decide(&batch(1.0), &ctx);
 
         assert!(matches!(res, EngineAction::Stop(_)));
     }
 
     #[test]
     fn target_not_reached_continues() {
-        let mut p = TargetValuePolicy::new(1.0);
+        let mut p = TargetValuePolicy::new(1.0, 0.01, 5);
 
         let ctx = EngineContext::default();
 

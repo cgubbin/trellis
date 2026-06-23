@@ -1,55 +1,89 @@
-set shell := ["bash", "-cu"]
+set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+
+# -----------------------
+# Version (read-only)
+# -----------------------
+
+version:
+    cargo metadata --format-version 1 \
+        | jq -r '.packages[] | select(.name=="confi") | .version'
+
+# -----------------------
+# Core workflow
+# -----------------------
 
 default:
     @just --list
 
-init:
+preflight:
+    git diff --quiet || (echo "Working tree not clean" && exit 1)
+    git diff --cached --quiet || (echo "Staged changes exist" && exit 1)
+
+    just flake-check
     cargo check
+    cargo build --release
+    cargo publish --dry-run
+
+test:
+   cargo test --no-default-features
+   cargo test
+   cargo test --all-features
+
+check:
+    cargo check --no-default-features
+    cargo check
+    cargo check --all-features
+
+lint:
+    cargo fmt --all -- --check
+    cargo clippy --no-default-features --all-targets -- -D warnings
+    cargo clippy --all-features --all-targets -- -D warnings
+
+ci:
+    just check
+    just lint
+    just test
+    just flake-check
+
+# -----------------------
+# Docs
+# -----------------------
+
+readme:
+    cargo readme > README.md
+    git diff --exit-code README.md
+
+docs:
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+
+# -----------------------
+# Coverage (llvm-cov)
+# -----------------------
+
+coverage:
+    cargo llvm-cov \
+        --workspace \
+        --all-features \
+        --doc \
+        --no-report
+
+coverage-ci:
+    cargo llvm-cov \
+        --workspace \
+        --all-features \
+        --doc \
+        --lcov \
+        --output-path lcov.info
+
+# -----------------------
+# Dev
+# -----------------------
 
 run *args:
     cargo run -- {{args}}
 
-run-json name="world":
-    cargo run -- --name {{name}} --json
-
-build:
-    cargo build
-
-release:
-    cargo build --release
-
-test:
-    cargo test
-
-nextest:
-    cargo nextest run
-
-fmt:
-    cargo fmt --all
-
-fmt-check:
-    cargo fmt --all --check
-
-lint:
-    cargo clippy --all-targets --all-features -- -D warnings
-
-check:
-    cargo check --all-targets --all-features
-
-docs:
-    cargo doc --no-deps
-
-coverage:
-    cargo tarpaulin --out Html
-
-coverage-llvm:
-    cargo tarpaulin --engine llvm --out Html
-
 watch:
     cargo watch -x check -x test
-
-bacon:
-    bacon
 
 bench:
     cargo bench
@@ -60,8 +94,17 @@ nix-build:
 flake-check:
     nix flake check
 
-ci: fmt-check lint test flake-check
-
 clean:
     cargo clean
-    rm -rf tarpaulin-report.html coverage
+
+# -----------------------
+# Release
+# -----------------------
+
+release type:
+    just preflight
+    just test
+    just lint
+    just readme
+
+    bash .scripts/release.sh {{type}}
