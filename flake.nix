@@ -57,6 +57,7 @@
           cargo-watch
           git-cliff
           cargo-deny
+          cargo-udeps
           cargo-semver-checks
           just
 
@@ -130,6 +131,9 @@
         strictDeps = true;
       };
     in {
+      packages = with pkgs; [
+        fontconfig
+      ];
       rust-build = craneLib.buildPackage {
         inherit src cargoArtifacts;
         strictDeps = true;
