@@ -2,7 +2,7 @@ use crate::CancellationGuard;
 
 use std::ops::Deref;
 
-/// Trait implemented by all problems solveable by `Trellis`
+/// Trait implemented by all problems solvable by `Trellis`
 ///
 /// A procedure defines the core loop of the solver. Typically we would write a for loop,
 /// consisting of an initialisation step where the procedure is arranged, a procedure carried out

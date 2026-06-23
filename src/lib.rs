@@ -114,7 +114,7 @@ pub(crate) use procedure::Infallible;
 pub use procedure::{FallibleProcedure, Procedure};
 
 pub use engine::{
-    AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, GenerateBuilder,
+    AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, EngineFailure, GenerateBuilder,
     GenerateBuilderFallible, InMemoryCheckpointStore, MaxIterationPolicy, NoProgressPolicy,
     RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, Termination, TimeoutPolicy,
 };

@@ -31,6 +31,7 @@ where
     ///
     /// The included `State` is a snapshot of the engine at the point of failure
     /// and can be used for debugging or checkpoint recovery.
+    #[error("error in underlying procedure: {error}")]
     Procedure {
         /// The underlying procedure error.
         error: Box<dyn std::error::Error + Send + Sync>,
