@@ -75,7 +75,7 @@ where
 
         // tolerance-based stopping condition
         if mean < self.tolerance {
-            return EngineAction::Stop(crate::Termination::Converged);
+            return EngineAction::Stop(Termination::Converged);
         }
 
         EngineAction::Continue
@@ -85,7 +85,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::engine::policy::PolicyStack;
     use crate::engine::EngineContext;
     use crate::progress::Progress;
 

@@ -250,7 +250,6 @@ mod tests {
         let action = stack.decide(&batch, &ctx);
 
         if let EngineAction::Stop(_) = action {
-            assert!(true);
         } else {
             panic!("Stop must dominate all policies");
         }

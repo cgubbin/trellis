@@ -100,7 +100,7 @@ where
         }
 
         if self.counter >= self.patience {
-            return EngineAction::Stop(crate::Termination::NoProgress);
+            return EngineAction::Stop(Termination::NoProgress);
         }
 
         EngineAction::Continue

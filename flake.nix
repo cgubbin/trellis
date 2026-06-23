@@ -91,6 +91,19 @@
         inherit system overlays;
       };
 
+      commonArgs = {
+        inherit src;
+        strictDeps = true;
+
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+        ];
+
+        buildInputs = with pkgs; [
+          fontconfig
+        ];
+      };
+
       rustToolchain = pkgs.fenix.fromToolchainFile {
         file = ./rust-toolchain.toml;
         sha256 = "mvUGEOHYJpn3ikC5hckneuGixaC+yGrkMM/liDIDgoU=";
@@ -99,15 +112,13 @@
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
       src = craneLib.cleanCargoSource ./.;
 
-      cargoArtifacts = craneLib.buildDepsOnly {
-        inherit src;
-        strictDeps = true;
-      };
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-      myCrate = craneLib.buildPackage {
-        inherit src cargoArtifacts;
-        strictDeps = true;
-      };
+      myCrate = craneLib.buildPackage (commonArgs
+        // {
+          inherit src cargoArtifacts;
+          strictDeps = true;
+        });
     in {
       default = myCrate;
     });
@@ -118,43 +129,55 @@
         inherit system overlays;
       };
 
+      commonArgs = {
+        inherit src;
+        strictDeps = true;
+
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+        ];
+
+        buildInputs = with pkgs; [
+          fontconfig
+        ];
+      };
+
       rustToolchain = pkgs.fenix.fromToolchainFile {
         file = ./rust-toolchain.toml;
         sha256 = "mvUGEOHYJpn3ikC5hckneuGixaC+yGrkMM/liDIDgoU=";
       };
 
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
       src = craneLib.cleanCargoSource ./.;
 
-      cargoArtifacts = craneLib.buildDepsOnly {
-        inherit src;
-        strictDeps = true;
-      };
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
     in {
-      packages = with pkgs; [
-        fontconfig
-      ];
-      rust-build = craneLib.buildPackage {
-        inherit src cargoArtifacts;
-        strictDeps = true;
-      };
+      rust-build = craneLib.buildPackage (commonArgs
+        // {
+          inherit src cargoArtifacts;
+          strictDeps = true;
+        });
 
-      rust-clippy = craneLib.cargoClippy {
-        inherit src cargoArtifacts;
-        cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings";
-      };
+      rust-clippy = craneLib.cargoClippy (commonArgs
+        // {
+          inherit src cargoArtifacts;
+          cargoClippyExtraArgs = "--all-targets --all-features -- -D warnings";
+        });
 
-      rust-doc = craneLib.cargoDoc {
-        inherit src cargoArtifacts;
-      };
+      rust-doc = craneLib.cargoDoc (commonArgs
+        // {
+          inherit src cargoArtifacts;
+        });
 
       rust-fmt = craneLib.cargoFmt {
         inherit src;
       };
 
-      rust-test = craneLib.cargoTest {
-        inherit src cargoArtifacts;
-      };
+      rust-test = craneLib.cargoTest (commonArgs
+        // {
+          inherit src cargoArtifacts;
+        });
     });
   };
 }

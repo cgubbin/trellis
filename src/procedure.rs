@@ -24,9 +24,7 @@ pub trait Procedure<P> {
     /// Initialisation.
     ///
     /// This step prepares the state object for the main procedure loop.
-    fn initialise(&self, _problem: &mut P, _state: &mut Self::State) {
-        ()
-    }
+    fn initialise(&self, _problem: &mut P, _state: &mut Self::State) {}
     /// One iteration of the core algorithm
     fn step(&self, problem: &mut P, state: &mut Self::State, guard: CancellationGuard<'_>);
 
@@ -80,7 +78,8 @@ where
         problem: &mut P,
         state: &mut Self::State,
     ) -> Result<(), Self::Error> {
-        Ok(self.initialise(problem, state))
+        let _: () = self.initialise(problem, state);
+        Ok(())
     }
 
     fn step_fallible(
@@ -89,7 +88,8 @@ where
         state: &mut Self::State,
         guard: CancellationGuard<'_>,
     ) -> Result<(), Self::Error> {
-        Ok(self.step(problem, state, guard))
+        let _: () = self.step(problem, state, guard);
+        Ok(())
     }
 
     fn finalise_fallible(

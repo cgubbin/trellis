@@ -70,9 +70,8 @@ mod result;
 mod termination;
 
 pub use policy::{
-    AbsoluteTolerancePolicy, CancellationPolicy, CheckpointPolicy, CompletionPolicy,
-    MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy,
-    TargetValuePolicy, TimeoutPolicy,
+    AbsoluteTolerancePolicy, CheckpointPolicy, MaxIterationPolicy, NoProgressPolicy,
+    RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, TimeoutPolicy,
 };
 
 pub use builder::GenerateBuilder;
@@ -218,7 +217,7 @@ where
 
         self.procedure
             .initialise_fallible(&mut self.problem, &mut self.state.user)
-            .map_err(|e| InternalEngineFailure::new(e))?;
+            .map_err(InternalEngineFailure::new)?;
 
         self.emit_event(EngineSignal::Initialised);
 
@@ -262,7 +261,7 @@ where
                     token: &self.cancellation,
                 },
             )
-            .map_err(|e| InternalEngineFailure::new(e))?;
+            .map_err(InternalEngineFailure::new)?;
 
         let progress = self.state.user.progress();
 
