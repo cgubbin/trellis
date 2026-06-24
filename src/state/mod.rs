@@ -67,7 +67,7 @@ pub struct State<S: UserState> {
 
     pub(crate) convergence: ConvergenceState<S::Float>,
     /// The user component of the state implements the application specific code
-    pub(crate) user: S,
+    pub user: S,
 }
 
 impl<S> State<S>
@@ -86,5 +86,15 @@ where
             runtime: RuntimeState::new(),
             convergence: ConvergenceState::new(),
         }
+    }
+
+    pub fn run_summary(&self) -> crate::RunSummary<<S as UserState>::Float> {
+        let view = StateView::new(self);
+
+        crate::RunSummary::new(view)
+    }
+
+    pub fn into_user(self) -> S {
+        self.user
     }
 }

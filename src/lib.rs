@@ -124,7 +124,7 @@ pub use engine::JsonCheckpointStore;
 
 pub use result::{EngineOutput, EngineOutputWithSnapshot, RunSummary, TrellisError};
 
-pub use state::{Snapshotable, StateRestorer, UserState};
+pub use state::{Snapshotable, State, StateRestorer, UserState};
 
 pub use progress::{Progress, ProgressDiagnostics};
 
