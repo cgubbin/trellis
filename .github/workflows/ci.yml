@@ -66,6 +66,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system deps (if needed)
+        run: |
+          sudo apt-get update
+          sudo apt-get install pkgconfig
+
       - name: Build docs
         run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
