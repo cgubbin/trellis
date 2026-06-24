@@ -122,7 +122,7 @@ pub use engine::{
 #[cfg(feature = "writing")]
 pub use engine::JsonCheckpointStore;
 
-pub use result::{EngineOutput, EngineOutputWithSnapshot, TrellisError};
+pub use result::{EngineOutput, EngineOutputWithSnapshot, RunSummary, TrellisError};
 
 pub use state::{Snapshotable, StateRestorer, UserState};
 
