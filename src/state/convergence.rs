@@ -66,6 +66,10 @@ impl<F: FloatCore> MeasureHistory<F> {
 
         improved
     }
+
+    pub fn best(&self) -> F {
+        self.best
+    }
 }
 
 /// Tracks convergence and optimisation progress throughout execution.
