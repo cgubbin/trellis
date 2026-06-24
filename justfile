@@ -23,6 +23,7 @@ preflight:
     just check
     just test
     just lint
+    just docs
     cargo build --release
     cargo publish --dry-run
 
