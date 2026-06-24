@@ -11,14 +11,16 @@ use crate::TrellisFloat;
 /// The separation is intentional:
 /// - `EngineSuccess` = controlled, expected termination
 /// - `EngineFailure` = unexpected error during execution
-pub type EngineResult<O, S> = Result<EngineOutput<O, S>, EngineFailure<S>>;
+pub type EngineResult<O, S, E> = Result<EngineOutput<O, S>, EngineFailure<S, E>>;
 
-pub(super) type InternalEngineResult<O, S> = Result<EngineOutput<O, S>, InternalEngineFailure>;
+pub(super) type InternalEngineResult<O, S, E> =
+    Result<EngineOutput<O, S>, InternalEngineFailure<E>>;
 
-pub type EngineResultWithSnapshot<O, S> = Result<EngineOutputWithSnapshot<O, S>, EngineFailure<S>>;
+pub type EngineResultWithSnapshot<O, S, E> =
+    Result<EngineOutputWithSnapshot<O, S>, EngineFailure<S, E>>;
 
 #[derive(thiserror::Error, Debug)]
-pub enum EngineFailure<S>
+pub enum EngineFailure<S, E>
 where
     S: UserState,
     <S as UserState>::Float: TrellisFloat,
@@ -34,19 +36,19 @@ where
     #[error("error in underlying procedure: {error}")]
     Procedure {
         /// The underlying procedure error.
-        error: Box<dyn std::error::Error + Send + Sync>,
+        error: E,
 
         /// Snapshot of the solver state at the time of failure.
         state: State<S>,
     },
 }
 
-impl<S> EngineFailure<S>
+impl<S, E> EngineFailure<S, E>
 where
     S: UserState,
     <S as UserState>::Float: TrellisFloat,
 {
-    pub(super) fn from_internal(internal: InternalEngineFailure, state: State<S>) -> Self {
+    pub(super) fn from_internal(internal: InternalEngineFailure<E>, state: State<S>) -> Self {
         EngineFailure::Procedure {
             error: internal.0,
             state,
@@ -54,13 +56,10 @@ where
     }
 }
 
-pub(super) struct InternalEngineFailure(Box<dyn std::error::Error + Send + Sync>);
+pub(super) struct InternalEngineFailure<E>(E);
 
-impl InternalEngineFailure {
-    pub(super) fn new<E>(error: E) -> Self
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        Self(Box::new(error))
+impl<E> InternalEngineFailure<E> {
+    pub(super) fn new(error: E) -> Self {
+        Self(error)
     }
 }

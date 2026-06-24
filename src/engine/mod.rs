@@ -150,7 +150,9 @@ where
     <Proc::State as UserState>::Float: FloatCore,
     Q: EnginePolicy<<Proc::State as UserState>::Float>,
 {
-    pub fn run_with_snapshot(mut self) -> EngineResultWithSnapshot<Proc::Output, Proc::State>
+    pub fn run_with_snapshot(
+        mut self,
+    ) -> EngineResultWithSnapshot<Proc::Output, Proc::State, Proc::Error>
     where
         Proc::State: Snapshotable,
     {
@@ -163,12 +165,12 @@ where
             .map_err(|internal| EngineFailure::from_internal(internal, self.state))
     }
 
-    pub fn run(mut self) -> EngineResult<Proc::Output, Proc::State> {
+    pub fn run(mut self) -> EngineResult<Proc::Output, Proc::State, Proc::Error> {
         self._run()
             .map_err(|internal| EngineFailure::from_internal(internal, self.state))
     }
 
-    fn _run(&mut self) -> InternalEngineResult<Proc::Output, Proc::State> {
+    fn _run(&mut self) -> InternalEngineResult<Proc::Output, Proc::State, Proc::Error> {
         self.initialise_state()?;
 
         loop {
@@ -187,7 +189,7 @@ where
         }
     }
 
-    fn policy_step(&mut self) -> Result<EngineAction, InternalEngineFailure> {
+    fn policy_step(&mut self) -> Result<EngineAction, InternalEngineFailure<Proc::Error>> {
         let batch = self.step_once()?;
 
         let ctx = EngineContext {
@@ -209,7 +211,7 @@ where
     }
 
     #[instrument(name = "initialising runner", fields(ident = Proc::NAME), skip_all)]
-    fn initialise_state(&mut self) -> Result<(), InternalEngineFailure> {
+    fn initialise_state(&mut self) -> Result<(), InternalEngineFailure<Proc::Error>> {
         self.start_time = Some(Instant::now());
         self.state
             .runtime
@@ -225,7 +227,10 @@ where
     }
 
     #[instrument(name = "wrapping up runner", fields(ident = Proc::NAME), skip_all)]
-    fn finalise(&mut self, reason: Termination) -> InternalEngineResult<Proc::Output, Proc::State> {
+    fn finalise(
+        &mut self,
+        reason: Termination,
+    ) -> InternalEngineResult<Proc::Output, Proc::State, Proc::Error> {
         match self
             .procedure
             .finalise_fallible(&mut self.problem, &self.state.user)
@@ -247,7 +252,8 @@ where
 
     fn step_once(
         &mut self,
-    ) -> Result<EventBatch<<Proc::State as UserState>::Float>, InternalEngineFailure> {
+    ) -> Result<EventBatch<<Proc::State as UserState>::Float>, InternalEngineFailure<Proc::Error>>
+    {
         self.state.runtime.increment_iteration();
         self.state
             .runtime
