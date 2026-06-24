@@ -1,4 +1,4 @@
-//! This module defines the canonical output types produced by an [`Engine`] execution.
+//! This module defines the canonical output types produced by an execution.
 //!
 //! It separates:
 //! - the *user-defined result* of a computation
@@ -40,7 +40,7 @@ impl<F> RunSummary<F> {
 
 /// Result of a completed calculation.
 ///
-/// Returned by [`Engine::run`].
+/// Returned by the engine run method
 #[derive(Debug)]
 pub struct EngineOutput<R, S>
 where
@@ -58,7 +58,7 @@ where
 
 /// Result of a completed calculation including a restart snapshot.
 ///
-/// Returned by [`Engine::run_with_snapshot`].
+/// Returned by the engine run_with_snapshot method
 #[derive(Debug)]
 pub struct EngineOutputWithSnapshot<R, S>
 where

@@ -27,8 +27,8 @@ pub use tracing::Tracer;
 
 /// Core observer trait for the engine event system.
 ///
-/// Observers receive a stream of [`EngineSignal`] events during execution
-/// along with a read-only [`StateView`].
+/// Observers receive a stream of signal events during execution
+/// along with a read-only view over the iteration state
 ///
 /// ### Design
 /// - Uses `&self` to support shared observers (`Arc`)

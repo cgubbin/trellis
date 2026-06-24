@@ -7,16 +7,12 @@ use std::ops::Deref;
 /// A procedure defines the core loop of the solver. Typically we would write a for loop,
 /// consisting of an initialisation step where the procedure is arranged, a procedure carried out
 /// on each loop iteration, and a finalisation step prior to return. This trait separates these
-/// methods so they can be called by the [`Runner`]
+/// methods so they can be called by the Engine
 pub trait Procedure<P> {
     /// The type returned to the caller.
-    ///
-    /// Trellis defines a data-rich [`Output`], which can be constructed from the procedure, and
-    /// internal state. In some circumstances it may be appropriate to return this type to the
-    /// caller. In other circumstances it may be preferential to bury this complexity, returning
-    /// the caller a custom datatype.
     type Output;
 
+    /// The internal state used by the procedure
     type State;
 
     /// An identifier for the procedure.

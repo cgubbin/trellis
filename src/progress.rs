@@ -1,7 +1,7 @@
 /// Numerical signals emitted by a solver during execution.
 ///
 /// `Progress` represents *algorithm-level observations*, not engine control flow.
-/// These signals are produced by a [`Procedure`] and consumed by:
+/// These signals are produced by a [`crate::Procedure`] and consumed by:
 /// - convergence tracking
 /// - policy evaluation
 /// - monitoring / logging systems
