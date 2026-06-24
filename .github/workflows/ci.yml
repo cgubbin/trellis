@@ -69,7 +69,7 @@ jobs:
       - name: Install system deps (if needed)
         run: |
           sudo apt-get update
-          sudo apt-get install pkgconfig
+          sudo apt-get install pkg-config
 
       - name: Build docs
         run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
