@@ -44,13 +44,13 @@ use num_traits::float::FloatCore;
 
 /// Internal execution state of the solver.
 ///
-/// This struct is owned exclusively by the [`Engine`] during execution
+/// This struct is owned exclusively by the Engine during execution
 /// and is not intended to be modified directly by users.
 ///
-/// Access to state is provided through [`StateView`].
+/// Access to state is provided through StateView.
 ///
 /// # Fields
-/// - `user`: user-defined state implementing [`UserState`]
+/// - `user`: user-defined state implementing UserState
 /// - `runtime`: execution metadata (iteration count, duration)
 /// - `convergence`: convergence tracking for policies
 #[derive(Clone, Debug)]
@@ -88,6 +88,8 @@ where
         }
     }
 
+    // TODO: More elegant to not expose these methods, or to return a state at all and construct
+    // directly on the error type
     pub fn run_summary(&self) -> crate::RunSummary<<S as UserState>::Float> {
         let view = StateView::new(self);
 
