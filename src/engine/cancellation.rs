@@ -5,6 +5,10 @@ pub struct CancellationGuard<'a> {
 }
 
 impl<'a> CancellationGuard<'a> {
+    pub fn new(token: &'a CancellationToken) -> Self {
+        Self { token }
+    }
+
     pub fn check(&self) -> bool {
         self.token.is_cancelled()
     }

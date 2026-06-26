@@ -112,6 +112,7 @@ mod state;
 pub(crate) use procedure::Infallible;
 
 pub use procedure::{FallibleProcedure, Procedure};
+pub use tokio_util::sync::CancellationToken;
 
 pub use engine::{
     AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, EngineFailure, GenerateBuilder,
