@@ -23,6 +23,8 @@ pub enum CheckpointError {
     FileSystem(#[from] std::io::Error),
     #[error("serde json error: {0}")]
     SerdeJson(Box<dyn std::error::Error + 'static>),
+    #[error("attempted to load, but no checkpoints available")]
+    NoCheckpoint,
 }
 
 pub struct CheckpointExtension<C> {
@@ -79,9 +81,9 @@ where
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Checkpoint<SN, F> {
-    user: SN,
-    runtime: RuntimeState,
-    convergence: ConvergenceState<F>,
+    pub(super) user: SN,
+    pub(super) runtime: RuntimeState,
+    pub(super) convergence: ConvergenceState<F>,
     version: u32,
     timestamp: SystemTime,
 }
@@ -136,5 +138,185 @@ where
         let maybe_checkpoint = self.load()?;
 
         Ok(maybe_checkpoint.map(|checkpoint| checkpoint.into_state()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{
+        CancellationGuard, CheckpointPolicy, GenerateBuilder, MaxIterationPolicy, Procedure,
+        Progress, ProgressDiagnostics, Snapshotable, StateRestorer, UserState,
+    };
+
+    #[derive(Clone, Debug)]
+    pub struct DummyProblem {
+        pub target: f64,
+    }
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct DummySnapshot {
+        pub value: f64,
+        pub steps: usize,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct DummyState {
+        pub value: f64,
+        pub steps: usize,
+    }
+
+    impl Default for DummyState {
+        fn default() -> Self {
+            Self {
+                value: 512.0,
+                steps: 0,
+            }
+        }
+    }
+
+    impl UserState for DummyState {
+        type Float = f64;
+
+        fn progress(&self) -> Progress<Self::Float> {
+            Progress::Report {
+                measure: self.value,
+                diagnostics: ProgressDiagnostics {
+                    absolute_error: Some(self.value.abs()),
+                    relative_error: Some(self.value.abs() / 10.0),
+                    ..Default::default()
+                },
+            }
+        }
+    }
+
+    impl Snapshotable for DummyState {
+        type Snapshot = DummySnapshot;
+
+        fn snapshot(&self) -> Self::Snapshot {
+            DummySnapshot {
+                value: self.value,
+                steps: self.steps,
+            }
+        }
+    }
+
+    impl StateRestorer<DummyState> for DummyState {
+        fn restore(snapshot: DummySnapshot) -> Self {
+            Self {
+                value: snapshot.value,
+                steps: snapshot.steps,
+            }
+        }
+    }
+
+    pub struct DummyProcedure;
+
+    impl Procedure<DummyProblem> for DummyProcedure {
+        const NAME: &'static str = "Dummy Procedure";
+
+        type State = DummyState;
+        type Output = DummyState;
+
+        fn initialise(&self, _problem: &mut DummyProblem, _state: &mut Self::State) {}
+
+        fn step(
+            &self,
+            problem: &mut DummyProblem,
+            state: &mut Self::State,
+            _guard: CancellationGuard<'_>,
+        ) {
+            state.steps += 1;
+
+            let delta = state.value - problem.target;
+
+            if delta.abs() > 1e-12 {
+                state.value -= 0.5 * delta;
+            }
+        }
+
+        fn finalise(&self, _problem: &mut DummyProblem, state: &Self::State) -> Self::Output {
+            state.clone()
+        }
+    }
+
+    #[test]
+    fn checkpoint_is_saved_when_requested() {
+        let store = InMemoryCheckpointStore::new();
+        let target = 1.0;
+
+        let _ = DummyProcedure
+            .build_for(DummyProblem { target })
+            .with_initial_state(DummyState::default())
+            .with_checkpoint_backend(store.clone())
+            .and_policy(CheckpointPolicy::every(2))
+            .and_policy(MaxIterationPolicy::new(3))
+            .finalise()
+            .run();
+
+        assert_eq!(store.saved_count(), 1);
+    }
+
+    #[test]
+    fn restored_snap_initialises_user_state() {
+        let store = InMemoryCheckpointStore::new();
+        let target = 0.0;
+
+        let _ = DummyProcedure
+            .build_for(DummyProblem { target })
+            .with_initial_state(DummyState::default())
+            .with_checkpoint_backend(store.clone())
+            .and_policy(CheckpointPolicy::every(2))
+            .and_policy(MaxIterationPolicy::new(3))
+            .finalise()
+            .run();
+
+        assert_eq!(store.saved_count(), 1);
+
+        let snap = DummySnapshot {
+            value: 42.0,
+            steps: 10,
+        };
+
+        let result = DummyProcedure
+            .build_for(DummyProblem { target })
+            .resume_from_snapshot(snap)
+            .and_policy(MaxIterationPolicy::new(1))
+            .with_checkpoint_backend(store.clone())
+            .finalise()
+            .run()
+            .unwrap();
+
+        assert_eq!(result.result.value, 21.0);
+    }
+
+    #[test]
+    fn restored_checkpoint_initialises_user_state() {
+        let store = InMemoryCheckpointStore::new();
+        let target = 0.0;
+
+        let _ = DummyProcedure
+            .build_for(DummyProblem { target })
+            .with_initial_state(DummyState::default())
+            .with_checkpoint_backend(store.clone())
+            .and_policy(CheckpointPolicy::every(2))
+            .and_policy(MaxIterationPolicy::new(3))
+            .finalise()
+            .run();
+
+        assert_eq!(store.saved_count(), 1);
+
+        let result = DummyProcedure
+            .build_for(DummyProblem { target })
+            .resume_from_checkpoint(store.clone())
+            .unwrap()
+            .and_policy(MaxIterationPolicy::new(3))
+            .with_checkpoint_backend(store.clone())
+            .finalise()
+            .run()
+            .unwrap();
+
+        assert_eq!(result.result.value, 64.0);
     }
 }

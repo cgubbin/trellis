@@ -44,7 +44,7 @@
 //! ### 3. Extensions
 //! Extensions react to high-level engine signals (`EngineSignal`) and perform
 //! side effects such as:
-//! - checkpoint persistence
+//! - checkpoint p    /// Propagate free-coefficient covariance to response variance at `stimulus`.ersistence
 //! - external storage
 //! - asynchronous logging pipelines
 //!
@@ -87,7 +87,9 @@ use num_traits::float::FloatCore;
 use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
+use crate::engine::checkpoint::CheckpointError;
 use crate::engine::policy::{CancellationPolicy, CompletionPolicy, EnginePolicy, PolicyStack};
+use crate::state::{ConvergenceState, RuntimeState};
 use crate::{
     engine::{
         checkpoint::{CheckpointBackend, CheckpointExtension},
@@ -116,6 +118,8 @@ impl<Proc> GenerateBuilderFallible for Proc {
             procedure: self,
             problem,
             state: None,
+            runtime: None,
+            convergence: None,
             time: true,
             cancellation_token: None,
 
@@ -149,6 +153,8 @@ impl<Proc> GenerateBuilder for Proc {
             procedure: Infallible(self),
             problem,
             state: None,
+            runtime: None,
+            convergence: None,
             time: true,
             cancellation_token: None,
 
@@ -177,6 +183,8 @@ where
     procedure: Proc,
     problem: P,
     state: Option<Proc::State>,
+    runtime: Option<RuntimeState>,
+    convergence: Option<ConvergenceState<<Proc::State as UserState>::Float>>,
     time: bool,
     cancellation_token: Option<CancellationToken>,
 
@@ -201,8 +209,10 @@ where
     }
 
     /// Attach a state observer (full state + stage awareness)
+    ///
+    /// TODO: pub(crate) until stabilised
     #[must_use]
-    pub fn attach_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
+    pub(crate) fn attach_observer<OBS>(mut self, observer: OBS, frequency: Frequency) -> Self
     where
         OBS: Observe<Proc::State> + 'static,
     {
@@ -276,6 +286,8 @@ where
             procedure: self.procedure,
             problem: self.problem,
             state: Some(user),
+            runtime: self.runtime,
+            convergence: self.convergence,
             time: self.time,
             cancellation_token: self.cancellation_token,
 
@@ -290,7 +302,7 @@ where
     }
 
     #[must_use]
-    pub fn resume_from_checkpoint(
+    pub fn resume_from_snapshot(
         self,
         snapshot: <Proc::State as Snapshotable>::Snapshot,
     ) -> Builder<Proc, P, Initialised>
@@ -304,6 +316,8 @@ where
             procedure: self.procedure,
             problem: self.problem,
             state: Some(user),
+            runtime: self.runtime,
+            convergence: self.convergence,
             time: self.time,
             cancellation_token: self.cancellation_token,
 
@@ -315,6 +329,41 @@ where
 
             _initialised: std::marker::PhantomData,
         }
+    }
+
+    #[must_use]
+    pub fn resume_from_checkpoint<C>(
+        self,
+        store: C,
+    ) -> Result<Builder<Proc, P, Initialised>, CheckpointError>
+    where
+        C: CheckpointBackend<
+                <Proc::State as Snapshotable>::Snapshot,
+                <Proc::State as UserState>::Float,
+            > + 'static,
+        Proc: FallibleProcedure<P>,
+        Proc::State: Snapshotable + StateRestorer<Proc::State>,
+    {
+        if let Some(state) = store.load()? {
+            return Ok(Builder {
+                procedure: self.procedure,
+                problem: self.problem,
+                state: Some(Proc::State::restore(state.user)),
+                runtime: Some(state.runtime),
+                convergence: Some(state.convergence),
+                time: self.time,
+                cancellation_token: self.cancellation_token,
+
+                observers: self.observers,
+
+                policies: self.policies,
+
+                extensions: self.extensions,
+
+                _initialised: std::marker::PhantomData,
+            });
+        }
+        Err(CheckpointError::NoCheckpoint)
     }
 }
 
@@ -348,7 +397,14 @@ where
         Engine {
             procedure: self.procedure,
             problem: self.problem,
-            state: State::new(user),
+            state: {
+                match (self.convergence, self.runtime) {
+                    (Some(convergence), Some(runtime)) => {
+                        State::from_parts(user, runtime, convergence)
+                    }
+                    _ => State::new(user),
+                }
+            },
 
             time: self.time,
             start_time: None,
@@ -388,7 +444,14 @@ where
         Engine {
             procedure: self.procedure,
             problem: self.problem,
-            state: State::new(user),
+            state: {
+                match (self.convergence, self.runtime) {
+                    (Some(convergence), Some(runtime)) => {
+                        State::from_parts(user, runtime, convergence)
+                    }
+                    _ => State::new(user),
+                }
+            },
 
             time: self.time,
             start_time: None,

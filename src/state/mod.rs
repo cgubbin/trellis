@@ -88,6 +88,18 @@ where
         }
     }
 
+    pub(crate) fn from_parts(
+        user: S,
+        runtime: RuntimeState,
+        convergence: ConvergenceState<S::Float>,
+    ) -> Self {
+        Self {
+            user,
+            runtime,
+            convergence,
+        }
+    }
+
     // TODO: More elegant to not expose these methods, or to return a state at all and construct
     // directly on the error type
     pub fn run_summary(&self) -> crate::RunSummary<<S as UserState>::Float> {

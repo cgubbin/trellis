@@ -70,7 +70,7 @@ mod result;
 mod termination;
 
 pub use policy::{
-    AbsoluteTolerancePolicy, CheckpointPolicy, MaxIterationPolicy, NoProgressPolicy,
+    AbsoluteTolerancePolicy, CheckpointPolicy, EnginePolicy, MaxIterationPolicy, NoProgressPolicy,
     RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, TimeoutPolicy,
 };
 
@@ -79,7 +79,6 @@ pub use cancellation::CancellationGuard;
 use context::EngineContext;
 pub(crate) use event::{EngineAction, EngineSignal, EventBatch};
 use extensions::Extensions;
-use policy::EnginePolicy;
 
 pub use result::{EngineFailure, EngineResult, EngineResultWithSnapshot};
 use result::{InternalEngineFailure, InternalEngineResult};

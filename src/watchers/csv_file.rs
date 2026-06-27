@@ -125,3 +125,69 @@ where
         let _ = writer.serialize(row);
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+
+//     use crate::engine::EngineSignal;
+//     use crate::progress::{Progress, ProgressDiagnostics};
+//     use crate::state::UserState;
+//     use crate::watchers::{Frequency, Observe};
+
+//     use std::io::Cursor;
+
+//     #[derive(Clone, Debug)]
+//     pub struct DummyState {
+//         pub value: f64,
+//         pub steps: usize,
+//     }
+
+//     impl Default for DummyState {
+//         fn default() -> Self {
+//             Self {
+//                 value: 10.0,
+//                 steps: 0,
+//             }
+//         }
+//     }
+
+//     impl UserState for DummyState {
+//         type Float = f64;
+
+//         fn progress(&self) -> Progress<Self::Float> {
+//             Progress::Report {
+//                 measure: self.value,
+//                 diagnostics: ProgressDiagnostics {
+//                     absolute_error: Some(self.value.abs()),
+//                     relative_error: Some(self.value.abs() / 10.0),
+//                     ..Default::default()
+//                 },
+//             }
+//         }
+//     }
+
+//     #[test]
+//     fn csv_writer_records_measure_progress() {
+//         let sink = Cursor::new(Vec::<u8>::new());
+//         let writer = CsvProgressWriter::<DummyState, _>::new(sink);
+
+//         let state = crate::state::State::new(DummyState::default());
+
+//         let view = crate::state::StateView::new(&state);
+
+//         writer.observe(
+//             "dummy",
+//             view,
+//             &EngineSignal::Progress(Progress::Measure(1.25)),
+//         );
+
+//         let bytes = writer.into_inner_for_test();
+//         let text = String::from_utf8(bytes).unwrap();
+
+//         assert!(text.contains("iteration"));
+//         assert!(text.contains("measure"));
+//         assert!(text.contains("3"));
+//         assert!(text.contains("1.25"));
+//     }
+// }
