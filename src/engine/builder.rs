@@ -331,7 +331,6 @@ where
         }
     }
 
-    #[must_use]
     pub fn resume_from_checkpoint<C>(
         self,
         store: C,
