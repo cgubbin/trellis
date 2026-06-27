@@ -384,7 +384,7 @@ where
 
         let cancellation = self.cancellation_token.unwrap_or_default();
 
-        #[cfg(feature = "ctrlc")]
+        #[cfg(all(feature = "ctrlc", not(test)))]
         {
             let token = cancellation.clone();
             ctrlc::set_handler(move || {
@@ -431,7 +431,7 @@ where
         let user = self.state.take().expect("builder invariant: user is set");
         let cancellation = self.cancellation_token.unwrap_or_default();
 
-        #[cfg(feature = "ctrlc")]
+        #[cfg(all(feature = "ctrlc", not(test)))]
         {
             let token = cancellation.clone();
             ctrlc::set_handler(move || {
