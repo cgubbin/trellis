@@ -64,15 +64,47 @@ A calculation is configured using the builder returned by
 [`GenerateBuilder::build_for`]:
 
 ```rust
-#
-#
-#
-#
-#
-#
-#
-#
-#
+use trellis_runner::{
+    GenerateBuilder, MaxIterationPolicy, RelativeTolerancePolicy,
+    CancellationGuard, Procedure, Progress, UserState,
+};
+
+struct Problem;
+
+#[derive(Default)]
+struct State {
+    value: f64,
+}
+
+impl UserState for State {
+    type Float = f64;
+
+    fn progress(&self) -> Progress<Self::Float> {
+        Progress::Measure(self.value)
+    }
+}
+
+struct Solver;
+
+impl Procedure<Problem> for Solver {
+    const NAME: &'static str = "Example";
+
+    type State = State;
+    type Output = ();
+
+    fn step(
+        &self,
+        _: &mut Problem,
+        _: &mut State,
+        _: CancellationGuard<'_>,
+    ) {}
+
+    fn finalise(
+        &self,
+        _: &mut Problem,
+        _: &State,
+    ) {}
+}
 let engine = Solver
     .build_for(Problem)
     .with_initial_state(State::default())
