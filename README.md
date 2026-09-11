@@ -79,8 +79,8 @@ struct State {
 impl UserState for State {
     type Float = f64;
 
-    fn progress(&self) -> Progress<Self::Float> {
-        Progress::Measure(self.value)
+    fn progress(&self) -> Option<Progress<Self::Float>> {
+        Some(Progress::Measure(self.value))
     }
 }
 

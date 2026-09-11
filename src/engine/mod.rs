@@ -77,7 +77,8 @@ pub use policy::{
 pub use builder::{GenerateBuilder, GenerateBuilderFallible};
 pub use cancellation::CancellationGuard;
 use context::EngineContext;
-pub(crate) use event::{EngineAction, EngineSignal, EventBatch};
+pub use event::EngineSignal;
+pub(crate) use event::{EngineAction, EventBatch};
 use extensions::Extensions;
 
 pub use result::{EngineFailure, EngineResult, EngineResultWithSnapshot};
@@ -268,15 +269,18 @@ where
             )
             .map_err(InternalEngineFailure::new)?;
 
-        let progress = self.state.user.progress();
+        self.emit_event(EngineSignal::Iterated);
+        let mut events = EventBatch::new();
 
-        self.state
-            .convergence
-            .observe(&progress, self.state.runtime.iteration());
+        if let Some(progress) = self.state.user.progress() {
+            self.state
+                .convergence
+                .observe(&progress, self.state.runtime.iteration());
 
-        self.emit_event(EngineSignal::Progress(progress.clone()));
+            self.emit_event(EngineSignal::Progress(progress.clone()));
 
-        let events = EventBatch::new().add(progress);
+            events = events.add(progress);
+        }
 
         Ok(events)
     }

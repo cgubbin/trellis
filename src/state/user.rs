@@ -13,9 +13,9 @@ pub trait UserState {
         true
     }
 
-    // fn get_param(&self) -> Option<&Self::Param>;
-
-    fn progress(&self) -> Progress<Self::Float>;
+    fn progress(&self) -> Option<Progress<Self::Float>> {
+        None
+    }
 }
 
 pub trait Snapshotable {

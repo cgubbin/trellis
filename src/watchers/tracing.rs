@@ -117,6 +117,10 @@ where
                 self.lifecycle(ident, "initialised");
             }
 
+            EngineSignal::Iterated => {
+                self.lifecycle(ident, "iterated");
+            }
+
             EngineSignal::CheckpointSaved => {
                 self.lifecycle(ident, "checkpoint_saved");
             }

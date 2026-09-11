@@ -84,12 +84,16 @@ pub enum CheckpointReason {
 /// - UI updates
 ///
 /// They are distinct from [`Progress`], which represents *numerical solver signals*.
+#[derive(Debug)]
 pub enum EngineSignal<F> {
     /// Engine has completed initialisation and is ready to iterate.
     Initialised,
 
     /// A single progress signal emitted during iteration.
     Progress(Progress<F>),
+
+    /// Engine has completed a single iteration
+    Iterated,
 
     /// A checkpoint has been successfully persisted.
     CheckpointSaved,
@@ -107,6 +111,7 @@ impl<F> EngineSignal<F> {
         match self {
             Self::Initialised => "initialised",
             Self::Progress(_) => "progress",
+            Self::Iterated => "iterated",
             Self::CheckpointSaved => "checkpoint_saved",
             Self::Termination(_) => "termination",
             Self::CheckpointRequested(_) => "checkpoint_requested",

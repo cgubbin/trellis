@@ -64,7 +64,7 @@ where
     }
 
     /// Access to user-defined state (read-only).
-    pub(crate) fn user<'b>(&'b self) -> &'a S {
+    pub fn user<'b>(&'b self) -> &'a S {
         &self.state.user
     }
 

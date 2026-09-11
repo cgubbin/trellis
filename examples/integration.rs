@@ -19,8 +19,8 @@ pub struct TrapezoidalState {
 impl UserState for TrapezoidalState {
     type Float = f64;
 
-    fn progress(&self) -> Progress<Self::Float> {
-        Progress::Measure(self.estimate)
+    fn progress(&self) -> Option<Progress<Self::Float>> {
+        Some(Progress::Measure(self.estimate))
     }
 }
 

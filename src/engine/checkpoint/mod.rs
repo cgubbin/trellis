@@ -179,15 +179,15 @@ mod tests {
     impl UserState for DummyState {
         type Float = f64;
 
-        fn progress(&self) -> Progress<Self::Float> {
-            Progress::Report {
+        fn progress(&self) -> Option<Progress<Self::Float>> {
+            Some(Progress::Report {
                 measure: self.value,
                 diagnostics: ProgressDiagnostics {
                     absolute_error: Some(self.value.abs()),
                     relative_error: Some(self.value.abs() / 10.0),
                     ..Default::default()
                 },
-            }
+            })
         }
     }
 

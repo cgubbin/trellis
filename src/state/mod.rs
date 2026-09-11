@@ -38,7 +38,7 @@ pub use user::{Snapshotable, StateRestorer, UserState};
 pub(crate) use convergence::ConvergenceState;
 pub(crate) use runtime::RuntimeState;
 
-pub(crate) use view::StateView;
+pub use view::StateView;
 
 use num_traits::float::FloatCore;
 

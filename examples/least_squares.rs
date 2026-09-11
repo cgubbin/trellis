@@ -28,15 +28,15 @@ impl Default for LSState {
 impl UserState for LSState {
     type Float = f64;
 
-    fn progress(&self) -> Progress<Self::Float> {
-        Progress::Report {
+    fn progress(&self) -> Option<Progress<Self::Float>> {
+        Some(Progress::Report {
             measure: self.loss,
             diagnostics: ProgressDiagnostics {
                 gradient_norm: Some((self.a.powi(2) + self.b.powi(2)).sqrt()),
                 step_size: Some(0.01),
                 ..Default::default()
             },
-        }
+        })
     }
 }
 

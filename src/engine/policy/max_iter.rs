@@ -34,7 +34,6 @@ impl MaxIterationPolicy {
 
 impl<F> EnginePolicy<F> for MaxIterationPolicy {
     fn decide(&mut self, _batch: &EventBatch<F>, context: &EngineContext) -> EngineAction {
-        dbg!(&context.iter);
         if context.iter >= self.max_iters {
             return EngineAction::Stop(crate::Termination::ExceededMaxIterations);
         }

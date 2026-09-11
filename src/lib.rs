@@ -77,8 +77,8 @@
 //! impl UserState for State {
 //!     type Float = f64;
 //!
-//!     fn progress(&self) -> Progress<Self::Float> {
-//!         Progress::Measure(self.value)
+//!     fn progress(&self) -> Option<Progress<Self::Float>> {
+//!         Some(Progress::Measure(self.value))
 //!     }
 //! }
 //!
@@ -233,9 +233,9 @@ pub use tokio_util::sync::CancellationToken;
 
 pub use engine::{
     AbsoluteTolerancePolicy, CancellationGuard, CheckpointPolicy, EngineFailure, EnginePolicy,
-    GenerateBuilder, GenerateBuilderFallible, InMemoryCheckpointStore, MaxIterationPolicy,
-    NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy, TargetValuePolicy, Termination,
-    TimeoutPolicy,
+    EngineSignal, GenerateBuilder, GenerateBuilderFallible, InMemoryCheckpointStore,
+    MaxIterationPolicy, NoProgressPolicy, RelativeTolerancePolicy, StagnationPolicy,
+    TargetValuePolicy, Termination, TimeoutPolicy,
 };
 
 #[cfg(feature = "writing")]
@@ -243,7 +243,7 @@ pub use engine::JsonCheckpointStore;
 
 pub use result::{EngineOutput, EngineOutputWithSnapshot, RunSummary, TrellisError};
 
-pub use state::{Snapshotable, State, StateRestorer, UserState};
+pub use state::{Snapshotable, State, StateRestorer, StateView, UserState};
 
 pub use progress::{Progress, ProgressDiagnostics};
 
